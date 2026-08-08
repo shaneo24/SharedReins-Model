@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(foreach \\($c in 'python','py','node','npx'\\) { $p = \\(Get-Command $c -ErrorAction SilentlyContinue\\); if \\($p\\) { \"$c -> $\\($p.Source\\)\" } else { \"$c -> not found\" } })",
+      "mcp__claude-in-chrome__navigate",
+      "mcp__claude-in-chrome__tabs_context_mcp",
+      "Bash(node build-bh.js \"C:/Users/sdon6/OneDrive/Desktop/Racing/Shared Reins/Model\")",
+      "Bash(node build-bh2.js \"C:/Users/sdon6/OneDrive/Desktop/Racing/Shared Reins/Model\")",
+      "Bash(node build-bh25.js \"C:/Users/sdon6/OneDrive/Desktop/Racing/Shared Reins/Model\")",
+      "Bash(rm -f \"C:/Users/sdon6/OneDrive/Desktop/Racing/Shared Reins/Model/sample-data/bloodhorse-2026-2yo.json\")",
+      "Bash(cd \"C:/Users/sdon6/OneDrive/Desktop/Racing/Shared Reins/Yearling Model/Yearling\" && grep -n \"return {\" js/filters.js | tail -3 && echo \"--- exports ---\" && sed -n '/^  return {/,/^  };/p' js/filters.js | tail -15 && echo \"--- preset-related ---\" && grep -n \"preset\\\\|Preset\\\\|serialize\\\\|Date\\(\" js/filters.js | head -20)"
+    ]
+  }
+}

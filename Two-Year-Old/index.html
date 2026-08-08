@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OBS 2YO Sale Model</title>
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">OBS</span>
+    <span class="brand-text">
+      <span class="brand-title">
+        2YO Sale Model
+        <span class="brand-prop">Proprietary Property of Shared Reins</span>
+      </span>
+      <small>Ocala Breeders' Sales · 2-year-olds in training</small>
+    </span>
+  </div>
+
+  <div class="topbar-controls">
+    <label class="field field-inline">
+      <span>Sale</span>
+      <select id="saleSelect"></select>
+    </label>
+    <button id="btnLoad" class="btn btn-primary">Load sale</button>
+    <button id="btnImportTop" class="btn" title="Load a sale from a saved JSON file">Import JSON</button>
+    <button id="btnSireBook" class="btn" title="Sire ratings and overrides">Sire book</button>
+    <button id="btnTheme" class="btn btn-icon" title="Toggle light/dark">◐</button>
+  </div>
+</header>
+
+<div id="loadStatus" class="loadbar" hidden></div>
+
+<main class="layout">
+
+  <!-- ------------------------------------------------------------ sidebar -->
+  <aside class="sidebar" id="sidebar">
+
+    <section class="panel">
+      <h2 class="panel-title">
+        Model weights
+        <button id="btnResetWeights" class="link-btn">reset</button>
+      </h2>
+      <div id="weights" class="weights"></div>
+      <div class="panel-note" id="weightNote"></div>
+
+      <details class="sub">
+        <summary>Scoring options</summary>
+        <label class="field">
+          <span>Horses you haven't rated yet</span>
+          <select id="optUnrated">
+            <option value="exclude">Score on the other factors</option>
+            <option value="neutral">Score the missing rating as neutral</option>
+          </select>
+        </label>
+        <div class="panel-note">
+          Breeze visual and Conformation are both your own eye. Until you enter
+          them, a horse is scored on whatever else is known.
+        </div>
+
+      </details>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">
+        Filters
+        <button id="btnClearFilters" class="link-btn">clear all</button>
+      </h2>
+
+      <div class="preset-row">
+        <select id="presetSelect" title="Load a saved filter"></select>
+        <button id="btnPresetSave" class="btn btn-sm" title="Save the current filters under a name">Save</button>
+        <button id="btnPresetDelete" class="btn btn-sm btn-icon" title="Delete the selected filter">✕</button>
+      </div>
+      <div class="quick-row preset-tools">
+        <button id="btnPresetExport" class="link-btn">export filters</button>
+        <button id="btnPresetImport" class="link-btn">import filters</button>
+      </div>
+      <div class="panel-note" id="presetNote"></div>
+
+      <label class="field">
+        <span>Search</span>
+        <input id="fq" type="search" placeholder="hip, sire, dam, consignor…" autocomplete="off">
+      </label>
+
+      <details class="sub" open>
+        <summary>Breeze (under tack)</summary>
+        <label class="field">
+          <span>Distance</span>
+          <select id="fDistance">
+            <option value="any">Any</option>
+            <option value="1">1/8 mile</option>
+            <option value="2">1/4 mile</option>
+          </select>
+        </label>
+        <div class="row2">
+          <label class="field">
+            <span>Fastest</span>
+            <input id="fBreezeMin" type="text" inputmode="decimal" placeholder="9.3">
+          </label>
+          <label class="field">
+            <span>Slowest</span>
+            <input id="fBreezeMax" type="text" inputmode="decimal" placeholder="10.2">
+          </label>
+        </div>
+        <div class="panel-note">Times in OBS fifths — <code>10.2</code> means :10&nbsp;2/5.</div>
+        <label class="field">
+          <span>Or: fastest <em id="fBreezePctVal">any</em> of its distance</span>
+          <input id="fBreezePct" type="range" min="0" max="100" step="5" value="100">
+        </label>
+        <label class="check"><input id="fRequireBreeze" type="checkbox"> Only horses that have worked</label>
+
+        <label class="field">
+          <span>Minimum visual rating <em id="fBvMinVal">any</em></span>
+          <input id="fBvMin" type="range" min="0" max="10" step="0.5" value="0">
+        </label>
+        <label class="field">
+          <span>Show</span>
+          <select id="fBvState">
+            <option value="any">All horses</option>
+            <option value="rated">Only ones I've watched</option>
+            <option value="unrated">Only ones I haven't watched</option>
+          </select>
+        </label>
+      </details>
+
+      <details class="sub" open>
+        <summary>Pedigree</summary>
+        <label class="field">
+          <span>Minimum pedigree rating <em id="fPedMinVal">any</em></span>
+          <input id="fPedMin" type="range" min="0" max="10" step="0.5" value="0">
+        </label>
+        <label class="field">
+          <span>Show</span>
+          <select id="fPedState">
+            <option value="any">All horses</option>
+            <option value="rated">Only ones I've rated</option>
+            <option value="unrated">Only ones I haven't rated</option>
+          </select>
+        </label>
+        <div id="pickSires" class="picker"></div>
+        <div id="pickDamSires" class="picker"></div>
+      </details>
+
+      <details class="sub">
+        <summary>Foal date</summary>
+        <div class="row2">
+          <label class="field"><span>From</span><input id="fFoalFrom" type="date"></label>
+          <label class="field"><span>To</span><input id="fFoalTo" type="date"></label>
+        </div>
+        <div class="quick-row">
+          <button class="chip-btn" data-foal="jan-feb">Jan–Feb</button>
+          <button class="chip-btn" data-foal="q1">Before Mar 31</button>
+          <button class="chip-btn" data-foal="clear">Any</button>
+        </div>
+      </details>
+
+      <details class="sub" open>
+        <summary>Conformation (your grades)</summary>
+        <label class="field">
+          <span>Minimum grade <em id="fConfMinVal">any</em></span>
+          <input id="fConfMin" type="range" min="0" max="10" step="0.5" value="0">
+        </label>
+        <label class="field">
+          <span>Show</span>
+          <select id="fConfState">
+            <option value="any">All horses</option>
+            <option value="graded">Only ones I've graded</option>
+            <option value="ungraded">Only ones I haven't graded</option>
+          </select>
+        </label>
+      </details>
+
+      <details class="sub">
+        <summary>Horse &amp; consignor</summary>
+        <div id="pickSexes" class="picker"></div>
+        <div id="pickConsignors" class="picker"></div>
+        <div id="pickAreas" class="picker"></div>
+        <div id="pickColors" class="picker"></div>
+        <div id="pickSessions" class="picker"></div>
+      </details>
+
+      <details class="sub">
+        <summary>Media &amp; status</summary>
+        <label class="check"><input id="fVideo" type="checkbox"> Has breeze video</label>
+        <label class="check"><input id="fWalk" type="checkbox"> Has walk video</label>
+        <label class="check"><input id="fPhoto" type="checkbox"> Has photo</label>
+        <label class="check"><input id="fOuts" type="checkbox"> Include horses that are out</label>
+      </details>
+
+      <details class="sub" id="resultsFilters">
+        <summary>Sale results</summary>
+        <label class="field">
+          <span>Outcome</span>
+          <select id="fResult">
+            <option value="any">Any</option>
+            <option value="sold">Sold</option>
+            <option value="rna">RNA</option>
+          </select>
+        </label>
+        <div class="row2">
+          <label class="field"><span>Min price</span><input id="fPriceMin" type="number" min="0" step="1000" placeholder="0"></label>
+          <label class="field"><span>Max price</span><input id="fPriceMax" type="number" min="0" step="1000" placeholder="∞"></label>
+        </div>
+      </details>
+
+      <label class="field">
+        <span>Minimum score <em id="fScoreMinVal">any</em></span>
+        <input id="fScoreMin" type="range" min="0" max="100" step="1" value="0">
+      </label>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">Your data</h2>
+      <div class="quick-row">
+        <button id="btnExportWork" class="btn btn-sm">Back up grades</button>
+        <button id="btnImportWork" class="btn btn-sm">Restore</button>
+      </div>
+      <div class="panel-note" id="storeNote"></div>
+    </section>
+  </aside>
+
+  <!-- --------------------------------------------------------------- main -->
+  <section class="content">
+
+    <div class="tabs" id="tabs">
+      <button class="tab is-on" data-tab="catalog">Full Catalog<span class="tab-count" id="countCatalog">—</span></button>
+      <span id="listTabs" class="tabs-lists"></span>
+      <button class="tab tab-add" id="btnNewList" title="Start another short list">+ list</button>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar-left">
+        <strong id="resultCount">No sale loaded</strong>
+        <span id="listTools" class="list-tools" hidden>
+          <button id="btnRenameList" class="link-btn">rename</button>
+          <button id="btnDeleteList" class="link-btn">delete list</button>
+        </span>
+        <span id="activeChips" class="chips"></span>
+      </div>
+      <div class="toolbar-right">
+        <label class="field field-inline" id="starTargetWrap" title="Which list the ★ button adds to">
+          <span>★ to</span>
+          <select id="starTarget"></select>
+        </label>
+        <button id="btnRerank" class="btn btn-sm" hidden title="Scores changed — re-sort the list">Re-rank</button>
+        <label class="field field-inline">
+          <span>Sort</span>
+          <select id="sortBy">
+            <option value="score">Model score</option>
+            <option value="hip">Hip number</option>
+            <option value="breeze">Breeze time</option>
+            <option value="foal">Foal date</option>
+            <option value="sire">Sire</option>
+            <option value="consignor">Consignor</option>
+            <option value="price">Price</option>
+          </select>
+        </label>
+        <button id="btnExportCsv" class="btn btn-sm">Export CSV</button>
+      </div>
+    </div>
+
+    <div id="empty" class="empty">
+      <h3>Pick a sale and hit <em>Load sale</em>.</h3>
+      <p>
+        Data comes straight from the OBS catalog feed — breeze times, videos, catalog
+        pages, sire records. The scoring is entirely yours: rate each horse on the
+        breeze, its conformation and its page, and the model weights those three into
+        a ranking. Nothing is scored for you.
+      </p>
+      <p class="empty-alt">
+        If the live pull ever fails, use <button id="btnImportSale" class="btn btn-sm">Import sale JSON</button>
+        after saving <span id="apiHint" class="mono"></span> from your browser.
+      </p>
+    </div>
+
+    <div id="emptyShortlist" class="empty" hidden>
+      <h3>Nothing on this list yet.</h3>
+      <p>
+        Star a horse (★) in the Full Catalog and it lands on whichever list the
+        <em>★ to</em> picker points at. A horse can sit on several at once — open
+        it and use the chips. This is where you work a list: record vet reports,
+        scratch the ones that don't vet, and take it to the barn.
+      </p>
+    </div>
+
+    <div id="tableWrap" class="table-wrap" hidden>
+      <table class="grid" id="grid">
+        <thead>
+          <tr>
+            <th class="c-rank">#</th>
+            <th class="c-score">Score</th>
+            <th class="c-hip">Hip</th>
+            <th class="c-ped">Sire / Dam</th>
+            <th class="c-pd" title="Pedigree — your 0–10 read of the page">Ped</th>
+            <th class="c-breeze">Breeze</th>
+            <th class="c-bv" title="Breeze visual — your 0–10 rating after watching the work">Visual</th>
+            <th class="c-foal">Foaled</th>
+            <th class="c-sex">Sex</th>
+            <th class="c-cons">Consignor</th>
+            <th class="c-conf">Conf</th>
+            <th class="c-vet">Vet</th>
+            <th class="c-result">Result</th>
+            <th class="c-flag"></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- ------------------------------------------------------------- sire book -->
+<div id="sireModal" class="modal" hidden>
+  <div class="modal-box">
+    <header class="modal-head">
+      <h2>Sire book</h2>
+      <div class="modal-head-tools">
+        <label class="check" title="Show only sires in this sale with no racing data behind them, so you can rate them yourself">
+          <input id="sireNeedsOnly" type="checkbox"> Needs a rating
+        </label>
+        <input id="sireSearch" type="search" placeholder="Filter sires…">
+        <button id="btnCloseSire" class="btn btn-icon">✕</button>
+      </div>
+    </header>
+    <div class="modal-note" id="sireNote"></div>
+    <div class="modal-body">
+      <table class="grid grid-compact">
+        <thead>
+          <tr>
+            <th>Sire</th>
+            <th class="num">In sale</th>
+            <th class="bh-col">Source list</th>
+            <th class="num bh-col">Rnrs</th>
+            <th class="num bh-col">% BTW</th>
+            <th class="num bh-col">GSW/G1</th>
+            <th class="num bh-col">$/rnr</th>
+            <th class="num bh-col">AWD</th>
+            <th class="num">Rating</th>
+            <th class="num mkt-col" title="What this sire's stock has fetched at OBS — reference only, not part of the score">Med. sale</th>
+            <th class="num mkt-col" title="Reference only">Sell-thru</th>
+            <th class="num">Your rating</th>
+          </tr>
+        </thead>
+        <tbody id="sireRows"></tbody>
+      </table>
+    </div>
+    <footer class="modal-foot">
+      <div class="foot-grid">
+        <div>
+          <label class="field field-inline"><span>BloodHorse sire lists — these drive the Pedigree score</span></label>
+          <div id="bhLists" class="ref-sales"></div>
+          <div class="quick-row" style="margin-top:7px">
+            <button id="btnImportSires" class="btn btn-sm btn-primary">Import sire list</button>
+            <button id="btnHowSires" class="btn btn-sm">How do I get one?</button>
+          </div>
+          <div id="bhHelp" class="panel-note" hidden></div>
+        </div>
+        <div>
+          <label class="field field-inline"><span>OBS sales pooled for the market columns (reference only)</span></label>
+          <div id="refSales" class="ref-sales"></div>
+        </div>
+      </div>
+    </footer>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".json,application/json" hidden>
+
+<script src="js/util.js"></script>
+<script src="js/store.js"></script>
+<script src="js/data.js"></script>
+<script src="js/bloodhorse.js"></script>
+<script src="js/sires.js"></script>
+<script src="js/scoring.js"></script>
+<script src="js/salehistory.js"></script>
+<script src="js/filters.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
