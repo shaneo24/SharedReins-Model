@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "ft-yearling-model",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["Yearling/serve.js", "8098"],
+      "port": 8098
+    }
+  ]
+}

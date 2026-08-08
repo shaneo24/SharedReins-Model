@@ -538,6 +538,16 @@ FT.ui = (function () {
         repositoryHtml(h) +
         '<textarea class="note-box" placeholder="Notes — walk, shoulder, knees, films, price ceiling…" ' +
                   'data-note="' + esc(h.key) + '">' + esc(note && note.notes || '') + '</textarea>' +
+
+        /* The sliders live at the bottom of this column rather than the other
+           one, so everything you *enter* about a horse — lists, vet, notes,
+           the two ratings — sits in one place, and the right-hand column stays
+           purely what the sale tells you. */
+        '<h4 style="margin-top:14px">Your ratings</h4>' +
+        gradeRow('Conformation', 'conf', h.key, conf,
+          h.hasWalkVideo ? 'photo + walk video' : (h.hasPhoto ? 'photo only' : 'no media')) +
+        gradeRow('Pedigree', 'ped', h.key, ped,
+          FT.sires.reference(ctx, h) || 'no sire data') +
       '</div>' +
       '<div class="detail-block">' +
         '<h4>Hip ' + esc(h.hip) + (h.name ? ' — ' + esc(h.name) : '') + '</h4>' +
@@ -562,11 +572,6 @@ FT.ui = (function () {
         '<div class="hist" data-hist-for="' + esc(h.key) + '">' +
           saleHistoryHtml(h, ctx._hist && ctx._hist[h.key]) +
         '</div>' +
-        '<h4 style="margin-top:12px">Your ratings</h4>' +
-        gradeRow('Conformation', 'conf', h.key, conf,
-          h.hasWalkVideo ? 'photo + walk video' : (h.hasPhoto ? 'photo only' : 'no media')) +
-        gradeRow('Pedigree', 'ped', h.key, ped,
-          FT.sires.reference(ctx, h) || 'no sire data') +
       '</div>' +
       mediaHtml(h, activeMedia) +
     '</div></td></tr>';
