@@ -414,6 +414,18 @@
       }
     }
 
+    // Vet status is shared, so it can change without you having touched it.
+    // The colour comes from a vet-<state> class, which has to be swapped by
+    // name rather than by pattern — `vet-select` matches the same shape, and
+    // stripping that would take the control's own styling with it.
+    var vet = OBS.store.vetStatus(key);
+    document.querySelectorAll('[data-vet="' + CSS.escape(key) + '"]').forEach(function (sel) {
+      if (document.activeElement === sel) return;
+      sel.value = vet;
+      OBS.store.VET_STATES.forEach(function (s) { sel.classList.remove('vet-' + s); });
+      sel.classList.add('vet-' + vet);
+    });
+
     // Refresh only the score breakdown. Rebuilding the whole detail row would
     // tear down the media pane — reloading a 35MB video, or losing your place
     // in it — and blow away focus in the notes box.
@@ -1246,6 +1258,262 @@
     $('fScoreMinVal').textContent = f.scoreMin === null ? 'any' : f.scoreMin;
   }
 
+  /* --------------------------------------------------------------- sharing */
+  /*
+   * The shared database is polled every few seconds, which means the table can
+   * now be rebuilt at a moment you did not choose. Everything in this section
+   * exists to make that invisible: a rebuild must never take an input away
+   * mid-keystroke, and it must never restart a walk video you are watching.
+   */
+
+  /* Which control had focus, and where the caret was inside it. The grade
+     inputs live in the table rows, so a repaint replaces the very element you
+     are typing into — without this, a poll landing at the wrong moment eats a
+     digit. */
+  var FOCUS_ATTRS = ['conf', 'bv', 'ped', 'note', 'vet', 'sireRating'];
+
+  function focusToken() {
+    var el = document.activeElement;
+    if (!el || !el.dataset) return null;
+    for (var i = 0; i < FOCUS_ATTRS.length; i++) {
+      var name = FOCUS_ATTRS[i];
+      if (el.dataset[name] === undefined) continue;
+      var t = { attr: 'data-' + name.replace(/[A-Z]/g, function (c) {
+                 return '-' + c.toLowerCase(); }),
+                val: el.dataset[name], start: null, end: null };
+      try { t.start = el.selectionStart; t.end = el.selectionEnd; } catch (e) {}
+      return t;
+    }
+    return null;
+  }
+
+  function restoreFocus(t) {
+    if (!t) return;
+    var el = document.querySelector('[' + t.attr + '="' + CSS.escape(t.val) + '"]');
+    if (!el) return;
+    el.focus();
+    // Number inputs throw on setSelectionRange in some browsers; the focus is
+    // the part that matters, the caret is a bonus.
+    try { if (t.start !== null) el.setSelectionRange(t.start, t.end); } catch (e) {}
+  }
+
+  /**
+   * A poll came back with someone else's work in it.
+   *
+   * This takes the same route the app already takes when *you* grade a horse:
+   * patch the affected rows in place with `refreshHorse` and mark the ranking
+   * stale, rather than rebuilding the table. Rebuilding would tear down the
+   * media pane of an open horse — restarting a walk video someone is part-way
+   * through — and replace the very input they are typing into. A colleague's
+   * grade arriving is no more entitled to do that than your own is.
+   *
+   * The order therefore does not resort itself under your hands; the existing
+   * **Re-rank** button appears, exactly as it does after you grade something.
+   */
+  function applyRemoteChanges() {
+    var pending = OBS.sync.pendingIds();
+
+    // A note you are part-way through typing has not reached the store yet
+    // (it is debounced by 400ms), so it has no queue entry to protect it.
+    // Treat the focused field as pending in its own right.
+    var focused = document.activeElement;
+    if (focused && focused.dataset && focused.dataset.note) {
+      var k = 'rating:' + focused.dataset.note;
+      // Field-scoped, so a grade someone else set on this same horse still
+      // lands while you type. An entry already queued outranks this and stays.
+      if (!pending[k]) pending[k] = { notes: true };
+    }
+
+    var res = OBS.store.applyRemote(OBS.sync.data(), pending);
+    if (!res.touched) return;
+
+    // The sire book feeds every score, so a list imported by someone else has
+    // to be folded into the index before anything is rescored against it.
+    if (res.structural) {
+      rebuildPedigree();
+      state.ctx = OBS.scoring.buildContext(
+        state.horses, state.sireIndex, state.damSireIndex, state.settings, state.bhIndex
+      );
+      state.ctx._hist = state.histCache;
+    }
+
+    var token = focusToken();
+    Object.keys(res.keys).forEach(refreshHorse);
+    if (res.structural) {
+      renderTabs();
+      renderPresets();
+      state.stale = true;
+      $('btnRerank').hidden = false;
+    }
+    updateCountLine();
+    restoreFocus(token);
+  }
+
+  function renderShare() {
+    if (!OBS.sync.configured) return;
+    var st = OBS.sync.status();
+    var live = (st === 'live' || st === 'offline');
+
+    $('shareLocked').hidden = live;
+    $('shareLive').hidden = !live;
+
+    var pill = $('syncPill');
+    var pending = OBS.sync.pending();
+    var text = { live: 'live', offline: 'offline', locked: 'locked',
+                 connecting: '…', off: '' }[st] || '';
+    pill.textContent = live && pending ? text + ' · ' + pending : text;
+    pill.className = 'sync-pill is-' + st;
+    pill.title = {
+      live: 'Connected. Changes appear for everyone within a few seconds.',
+      offline: 'No connection. You can carry on — your changes are saved here '
+             + 'and go up when the signal comes back.',
+      locked: 'Enter the access code to join the shared data.',
+      connecting: 'Connecting…'
+    }[st] || '';
+
+    if (live) {
+      // No error detail here. Once you are through the door, "offline" is a
+      // normal state at a sale, not a fault to be diagnosed — the setup advice
+      // belongs on the unlock screen, where it is actually actionable.
+      $('shareStatus').textContent = st === 'offline'
+        ? 'Offline — ' + pending + ' change' + (pending === 1 ? '' : 's') +
+          ' waiting. They go up when the signal returns.'
+        : pending ? 'Saving ' + pending + ' change' + (pending === 1 ? '' : 's') + '…'
+                  : 'Up to date.';
+    }
+  }
+
+  /**
+   * The front door.
+   *
+   * Shown when sharing is configured and this device has never had a code
+   * accepted. It is presentation, not protection — an overlay is removable
+   * from devtools by anyone who cares to. What actually protects the data is
+   * that `sr_read` refuses to return a single row without the code, so getting
+   * past this gains you an empty app rather than anyone's shortlist.
+   *
+   * Critically, it keys off whether a code was ever *accepted here*, not off
+   * the live connection. Gating on connectivity would lock someone out of
+   * their own morning's grading the moment the signal dropped in a barn, which
+   * is precisely when they need it.
+   */
+  function showGate(show) {
+    var gate = $('accessGate');
+    if (!gate) return;
+    gate.hidden = !show;
+    document.body.style.overflow = show ? 'hidden' : '';
+    if (show) $('gateCode').focus();
+  }
+
+  /**
+   * Push this browser's own work up — but only when it has never synced here
+   * before.
+   *
+   * On a genuine first join, whatever was graded offline exists nowhere else,
+   * so it is captured before the server's copy lands on top (the queued ops
+   * shield those horses from the incoming snapshot). On a *re*-join — coming
+   * back after the code was rotated, most obviously — the server has already
+   * seen this device's work and may well have moved past it, so re-uploading
+   * would quietly roll back whatever changed while it was locked out.
+   *
+   * Genuinely unsent edits are unaffected either way: they sit in the sync
+   * queue and go up on the next flush regardless of which branch runs.
+   */
+  function contributeIfFirstJoin(res) {
+    if (!res || !res.firstJoin) return;
+    OBS.store.localOps().forEach(OBS.sync.push);
+    OBS.sync.flush();
+  }
+
+  function wireGate() {
+    var form = $('gateForm');
+    if (!form) return;
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = $('gateCode');
+      var err = $('gateError');
+      var btn = $('gateSubmit');
+      err.hidden = true;
+      btn.disabled = true;
+
+      OBS.sync.unlock(input.value).then(function (res) {
+        input.value = '';
+        contributeIfFirstJoin(res);
+        applyRemoteChanges();
+        renderShare();
+        showGate(false);
+      }).catch(function (e2) {
+        err.textContent = e2.message;
+        err.hidden = false;
+        input.select();
+      }).then(function () {
+        btn.disabled = false;
+      });
+    });
+  }
+
+  function wireShare() {
+    if (!OBS.sync.configured) return;
+    $('sharePanel').hidden = false;
+    $('shareName').value = OBS.sync.identity();
+    wireGate();
+    // 'locked' means configured but no code has ever been accepted here.
+    showGate(OBS.sync.status() === 'locked');
+
+    OBS.sync.onChange(function (what) {
+      if (what === 'data') applyRemoteChanges();
+      renderShare();
+      // Rotating the code makes the stored one stop working. The next sync
+      // clears it and drops back to 'locked', which puts the door back up
+      // rather than leaving someone editing into a void.
+      if (OBS.sync.status() === 'locked') showGate(true);
+    });
+
+    $('btnShareUnlock').addEventListener('click', unlock);
+    $('shareCode').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') unlock();
+    });
+
+    function unlock() {
+      var input = $('shareCode');
+      var err = $('shareError');
+      err.hidden = true;
+      $('btnShareUnlock').disabled = true;
+
+      OBS.sync.unlock(input.value).then(function (res) {
+        input.value = '';
+        contributeIfFirstJoin(res);
+        applyRemoteChanges();
+        renderShare();
+        showGate(false);
+      }).catch(function (e) {
+        err.textContent = e.message;
+        err.hidden = false;
+      }).then(function () {
+        $('btnShareUnlock').disabled = false;
+      });
+    }
+
+    $('shareName').addEventListener('change', function (e) {
+      OBS.sync.setIdentity(e.target.value);
+    });
+
+    $('btnShareDisconnect').addEventListener('click', function () {
+      if (!window.confirm('Sign out of the shared data on this device?\n\n' +
+            'You will need the access code again to get back in. Grades already ' +
+            'synced are safe — they live in the shared database, not here.')) return;
+      OBS.sync.signOut();
+      // Reload rather than just re-showing the door: signing out has to leave
+      // no trace of the shared work on screen, and the cheapest way to be sure
+      // of that is to start the page over.
+      window.location.reload();
+    });
+
+    OBS.sync.start();
+    renderShare();
+  }
+
   /* ------------------------------------------------------------------ init */
 
   function init() {
@@ -1259,6 +1527,7 @@
     $('storeNote').textContent = OBS.store.persistent
       ? 'Grades and notes are saved in this browser. Back them up before a sale.'
       : 'This browser is blocking local storage — your grades will vanish on reload. Back them up.';
+    wireShare();
   }
 
   document.addEventListener('DOMContentLoaded', init);
@@ -1269,6 +1538,10 @@
     state: state,
     recompute: recompute,
     loadSale: loadSale,
-    setCurrentSale: setCurrentSale
+    setCurrentSale: setCurrentSale,
+    /* Exposed so a shared-data change can be replayed by hand: stub
+       OBS.sync.data() with a snapshot and call this to watch it land. */
+    applyRemoteChanges: applyRemoteChanges,
+    contributeIfFirstJoin: contributeIfFirstJoin
   };
 })();

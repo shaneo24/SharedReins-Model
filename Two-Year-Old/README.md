@@ -485,6 +485,33 @@ and catalog page.
 
 ---
 
+## Working as a group
+
+By default everything you type stays in this browser. Switch on **shared data**
+and grades, notes, short lists and vet status become one set that everyone
+sees — what you enter appears for the others within a few seconds, and theirs
+appears for you.
+
+It needs a free Supabase project and about five minutes of setup, all of it in
+[`shared/README.md`](../shared/README.md). Until you do that, nothing changes:
+no network, no prompts, and the **Shared** panel doesn't appear.
+
+Three things worth knowing before you turn it on:
+
+- **One rating per horse, last edit wins** — resolved per field, so someone
+  grading the physical while you read the page won't overwrite you.
+- **Your work never waits on the network.** Changes save locally first and go
+  up afterwards, so bad reception on the grounds costs you nothing.
+- **The access code is one shared secret.** It proves you're one of the group,
+  not which member — the display name is a label, not a login. Anyone with the
+  code can change anything, which is what "shared" means.
+- **The site opens on a code prompt** once sharing is on, and asks once per
+  device. Losing signal never locks anyone out of work they've already started.
+
+Model weights, scoring options and theme stay yours alone.
+
+---
+
 ## Layout
 
 ```
@@ -492,7 +519,10 @@ index.html          markup
 css/styles.css      styling, light + dark
 js/util.js          fifths parsing, dates, percentiles, formatting
 js/data.js          OBS API, sale ids, record normalisation
-js/store.js         localStorage: grades, notes, sire lists, overrides, settings
+js/config.js        shared-data connection settings (placeholders = local only)
+js/sync.js          shared-data transport — GENERATED from shared/sync.js
+js/store.js         localStorage: grades, notes, sire lists, overrides, settings;
+                    mirrors the shared ones up
 js/bloodhorse.js    BloodHorse sire lists — the racing basis for Pedigree
 js/sires.js         OBS market index (reference only) + the rating chain
 js/salehistory.js   prior auction appearances — OBS matching + Keeneland lookup

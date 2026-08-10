@@ -8,6 +8,27 @@
 </head>
 <body>
 
+<!-- Access gate. Shown before anything else when sharing is configured and this
+     device has not been unlocked yet. A device that HAS been unlocked is never
+     gated again, including with no signal — see wireShare() in js/app.js. -->
+<div class="gate" id="accessGate" hidden>
+  <form class="gate-card" id="gateForm">
+    <span class="gate-mark">OBS</span>
+    <h1 class="gate-title">2YO Sale Model</h1>
+    <p class="gate-prop">Proprietary Property of Shared Reins</p>
+    <p class="gate-note">
+      This tool and the grades in it are private. Enter the access code to
+      continue — you'll only be asked once on this device.
+    </p>
+    <div class="gate-row">
+      <input id="gateCode" type="password" placeholder="Access code"
+             autocomplete="current-password" spellcheck="false" autofocus>
+      <button class="btn btn-primary" id="gateSubmit" type="submit">Enter</button>
+    </div>
+    <div class="gate-err" id="gateError" hidden></div>
+  </form>
+</div>
+
 <header class="topbar">
   <div class="brand">
     <span class="brand-mark">OBS</span>
@@ -221,6 +242,39 @@
       </div>
       <div class="panel-note" id="storeNote"></div>
     </section>
+
+    <!-- Hidden wholesale when js/config.js still holds the placeholders, so a
+         local-only copy of the app shows no trace of sharing. -->
+    <section class="panel" id="sharePanel" hidden>
+      <h2 class="panel-title">Shared
+        <span class="sync-pill" id="syncPill" title="">·</span>
+      </h2>
+
+      <div id="shareLocked">
+        <div class="panel-note">
+          Grades, notes, short lists and vet status are shared with everyone
+          who has the access code. Enter it once on this device.
+        </div>
+        <div class="quick-row">
+          <input id="shareCode" type="password"
+                 placeholder="Access code" autocomplete="off" spellcheck="false">
+          <button id="btnShareUnlock" class="btn btn-sm">Connect</button>
+        </div>
+        <div class="panel-note err" id="shareError" hidden></div>
+      </div>
+
+      <div id="shareLive" hidden>
+        <label class="field">
+          <span>Your name <em>(optional)</em></span>
+          <input id="shareName" type="text" maxlength="40"
+                 placeholder="e.g. Shane" autocomplete="off">
+        </label>
+        <div class="panel-note" id="shareStatus"></div>
+        <div class="quick-row">
+          <button id="btnShareDisconnect" class="btn btn-sm">Disconnect</button>
+        </div>
+      </div>
+    </section>
   </aside>
 
   <!-- --------------------------------------------------------------- main -->
@@ -371,6 +425,8 @@
 <input type="file" id="fileInput" accept=".json,application/json" hidden>
 
 <script src="js/util.js"></script>
+<script src="js/config.js"></script>
+<script src="js/sync.js"></script>
 <script src="js/store.js"></script>
 <script src="js/data.js"></script>
 <script src="js/bloodhorse.js"></script>

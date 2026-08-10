@@ -64,13 +64,15 @@ Three things to know before you do it:
 
 **It is a public site.** Free GitHub Pages serves publicly whatever repo it
 builds from — private Pages is an Enterprise Cloud feature. Anyone with the URL
-gets the tool and this README. Your grades don't go with it: everything you
-type lives in `localStorage` and is never uploaded.
+gets the tool and this README. Your grades don't go with it: by default
+everything you type lives in `localStorage` and is never uploaded. (If you have
+switched on [shared data](../shared/README.md), that changes — see below.)
 
 **`localStorage` is per-origin.** Grades entered on `localhost:8098` will not
 appear on `you.github.io`, and vice versa — same browser, different box. Moving
 between them means *Back up grades* on one and *Restore* on the other. Worth
-knowing before you grade eighty hips on the wrong one.
+knowing before you grade eighty hips on the wrong one. Shared data sidesteps
+this: both origins read the same database.
 
 **You'd be hotlinking Fasig-Tipton's photos and catalog PDFs from a public
 page**, which is a different proposition from a tool on your own laptop doing
@@ -250,6 +252,33 @@ A fresh sale has no ranking, so it builds as you go:
    list — pull films, record vet results.
 
 ---
+
+---
+
+## Working as a group
+
+By default everything you type stays in this browser. Switch on **shared data**
+and grades, notes, short lists and vet status become one set that everyone
+sees — what you enter appears for the others within a few seconds, and theirs
+appears for you.
+
+It needs a free Supabase project and about five minutes of setup, all of it in
+[`shared/README.md`](../shared/README.md). Until you do that, nothing changes:
+no network, no prompts, and the **Shared** panel doesn't appear.
+
+Three things worth knowing before you turn it on:
+
+- **One rating per horse, last edit wins** — resolved per field, so someone
+  grading the physical while you read the page won't overwrite you.
+- **Your work never waits on the network.** Changes save locally first and go
+  up afterwards, so bad reception on the grounds costs you nothing.
+- **The access code is one shared secret.** It proves you're one of the group,
+  not which member — the display name is a label, not a login. Anyone with the
+  code can change anything, which is what "shared" means.
+- **The site opens on a code prompt** once sharing is on, and asks once per
+  device. Losing signal never locks anyone out of work they've already started.
+
+Model weights, scoring options and theme stay yours alone.
 
 ## The sire book
 
@@ -524,8 +553,10 @@ index.html          markup
 css/styles.css      styling, light + dark
 js/util.js          dates, percentiles, formatting
 js/data.js          Fasig-Tipton API, sale identifiers, record normalisation
+js/config.js        shared-data connection settings (placeholders = local only)
+js/sync.js          shared-data transport — GENERATED from shared/sync.js
 js/store.js         localStorage: grades, notes, short lists, saved filters,
-                    sire lists, overrides, settings
+                    sire lists, overrides, settings; mirrors the shared ones up
 js/bloodhorse.js    BloodHorse sire lists — the racing record behind each page
 js/sires.js         Fasig-Tipton yearling market index (reference only)
 js/salehistory.js   prior auction appearances — Fasig matching + Keeneland lookup

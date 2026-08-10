@@ -187,6 +187,111 @@ body {
   border-radius: 3px;
   font-size: 11px;
 }
+.panel-note.err { color: var(--bad); }
+
+/* ---------------------------------------------------------------- the gate */
+/* Front door for a shared deployment. Opaque rather than a translucent scrim:
+   a blurred-but-readable catalogue behind the prompt would leak the very
+   thing the code is there to protect. */
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: var(--bg);
+}
+.gate[hidden] { display: none; }
+
+.gate-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 28px 26px 24px;
+  text-align: center;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .10);
+}
+.gate-mark {
+  display: inline-block;
+  font-weight: 800;
+  letter-spacing: .5px;
+  font-size: 14px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+}
+.gate-title {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 14px 0 0;
+}
+.gate-prop {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+  border-radius: 3px;
+  padding: 2px 6px;
+  margin: 8px 0 0;
+}
+.gate-note {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-2);
+  margin: 16px 0 0;
+}
+.gate-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 18px;
+}
+.gate-row input { flex: 1; }
+.gate-row .btn { white-space: nowrap; }
+.gate-err {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--bad);
+  margin-top: 12px;
+  text-align: left;
+}
+
+/* Sharing status, in the panel title. Deliberately small and quiet: it is
+   reassurance, not an alert. `offline` is amber rather than red because it is
+   not an error — work carries on locally and goes up when the signal returns,
+   which at a sale is a normal few minutes rather than a fault. */
+.sync-pill {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  text-transform: none;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.sync-pill.is-live {
+  color: var(--good);
+  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+  background: color-mix(in srgb, var(--good) 10%, var(--bg));
+}
+.sync-pill.is-offline {
+  color: var(--warn);
+  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
+  background: color-mix(in srgb, var(--warn) 10%, var(--bg));
+}
+.sync-pill.is-locked, .sync-pill.is-connecting {
+  color: var(--text-3);
+  border-color: var(--line);
+}
+.sync-pill.is-off { display: none; }
 
 .sub {
   border-top: 1px solid var(--line-soft);
@@ -220,7 +325,7 @@ body {
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
 input[type="text"], input[type="search"], input[type="number"],
-input[type="date"], select, textarea {
+input[type="date"], input[type="password"], select, textarea {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line);

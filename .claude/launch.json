@@ -3,9 +3,17 @@
   "configurations": [
     {
       "name": "ft-yearling-model",
+      "cwd": "Yearling",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["Yearling/serve.js", "8098"],
+      "runtimeArgs": ["serve.js", "8098"],
       "port": 8098
+    },
+    {
+      "name": "obs-2yo-model",
+      "cwd": "Two-Year-Old",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["serve.js", "8099"],
+      "port": 8099
     }
   ]
 }

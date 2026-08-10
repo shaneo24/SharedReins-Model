@@ -3,7 +3,12 @@
 
 # Local Claude Code permission grants: machine-specific, full of absolute paths.
 # .claude/launch.json IS tracked; it's project config.
-.claude/settings.local.json
+#
+# The `**/` matters. A pattern with a slash in it is anchored to the folder its
+# .gitignore sits in, so a bare `.claude/settings.local.json` here matches only
+# the one at the repo root — the copies inside Yearling/ and Two-Year-Old/ walk
+# straight past it.
+**/.claude/settings.local.json
 
 # OS and editor droppings
 .DS_Store
