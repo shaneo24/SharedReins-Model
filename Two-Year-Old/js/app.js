@@ -1508,6 +1508,86 @@
     renderShare();
   }
 
+  /* -------------------------------------------------------------- updates */
+  /*
+   * Noticing that a new version has been published.
+   *
+   * This page is opened in the morning and left open all day, so cache headers
+   * are beside the point — a tab that never reloads never asks for anything
+   * again, and would happily run last week's code through a sale. GitHub Pages
+   * also serves everything with `max-age=600` and gives no way to change that,
+   * so even a plain refresh can hand back a ten-minute-old copy.
+   *
+   * The trick is that Pages ETags look like `<deploy>-<size>`, and the first
+   * half is the same across every file in a deploy — so it changes on every
+   * push whether or not the file did. Comparing it needs no version file, no
+   * build step, and nothing to remember at deploy time.
+   */
+  var UPDATE_POLL = 5 * 60 * 1000;
+  var deployId = null;          // null once we know we can't tell
+  var updatePending = false;
+
+  function deployIdNow() {
+    // A HEAD is a few hundred bytes and Pages answers it with the ETag.
+    // `no-store` so the check itself can't be served from the cache it exists
+    // to defeat.
+    return fetch(location.pathname, { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) {
+        var tag = r.headers.get('ETag') || '';
+        return tag ? tag.replace(/"/g, '').split('-')[0] : '';
+      })
+      .catch(function () { return ''; });
+  }
+
+  function showUpdateBar(show) {
+    var bar = $('updateBar');
+    if (bar) bar.hidden = !show;
+  }
+
+  function checkForUpdate() {
+    if (updatePending || !deployId) return Promise.resolve(false);
+    return deployIdNow().then(function (now) {
+      // No ETag means we can't tell — a plain file server, or file://. Stay
+      // quiet rather than nagging on every poll.
+      if (!now || now === deployId) return false;
+      updatePending = true;
+
+      /* Reload straight away if nobody is looking. Someone who left the tab
+         open comes back to the current version with no banner and no click;
+         someone actively grading gets asked instead, because pulling the page
+         out from under a half-typed note would be its own kind of bug. */
+      if (document.hidden) { location.reload(); return true; }
+      showUpdateBar(true);
+      return true;
+    });
+  }
+
+  function wireUpdates() {
+    var bar = $('updateBar');
+    if (!bar) return;
+    // Nothing to compare against off disk, and no deploys to notice either.
+    if (location.protocol === 'file:') return;
+
+    $('btnUpdateReload').addEventListener('click', function () { location.reload(); });
+    $('btnUpdateDismiss').addEventListener('click', function () {
+      showUpdateBar(false);
+      // Dismiss hides the bar for this session but leaves `updatePending` set,
+      // so the poll stops pestering — the new version arrives on the next
+      // natural reload.
+    });
+
+    deployIdNow().then(function (id) {
+      deployId = id || null;
+      if (!deployId) return;
+      setInterval(checkForUpdate, UPDATE_POLL);
+      // Coming back to the tab is the moment a stale page is most likely to be
+      // used, so check then too rather than waiting out the interval.
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) checkForUpdate();
+      });
+    });
+  }
+
   /* ------------------------------------------------------------------ init */
 
   function init() {
@@ -1522,6 +1602,7 @@
       ? 'Grades and notes are saved in this browser. Back them up before a sale.'
       : 'This browser is blocking local storage — your grades will vanish on reload. Back them up.';
     wireShare();
+    wireUpdates();
   }
 
   document.addEventListener('DOMContentLoaded', init);
@@ -1536,6 +1617,10 @@
     /* Exposed so a shared-data change can be replayed by hand: stub
        OBS.sync.data() with a snapshot and call this to watch it land. */
     applyRemoteChanges: applyRemoteChanges,
-    contributeIfFirstJoin: contributeIfFirstJoin
+    contributeIfFirstJoin: contributeIfFirstJoin,
+    /* Exposed so a deploy can be simulated: OBS.app.checkForUpdate() after
+       poking the recorded id tells you what a real push would do. */
+    checkForUpdate: checkForUpdate,
+    _setDeployId: function (v) { deployId = v; updatePending = false; }
   };
 })();

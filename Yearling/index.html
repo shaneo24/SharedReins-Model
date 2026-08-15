@@ -55,6 +55,15 @@
 
 <div id="loadStatus" class="loadbar" hidden></div>
 
+<!-- Shown when a new version has been deployed while this tab was open. The
+     app is a long-lived page — people leave it open all day at a sale — so it
+     would otherwise keep running yesterday's code indefinitely. -->
+<div id="updateBar" class="updatebar" hidden>
+  <span>A newer version of this tool has been published.</span>
+  <button id="btnUpdateReload" class="btn btn-sm">Reload now</button>
+  <button id="btnUpdateDismiss" class="link-btn">later</button>
+</div>
+
 <main class="layout">
 
   <!-- ------------------------------------------------------------ sidebar -->

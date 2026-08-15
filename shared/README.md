@@ -240,6 +240,35 @@ keeps only `0`. Without that, hip 7 of the 2026 Saratoga sale showed a September
 The flag is the signal rather than the price, since completed sales carry
 negative prices too when a horse was withdrawn.
 
+## Pushing an update
+
+GitHub Pages serves everything with `Cache-Control: max-age=600` and gives no
+way to change that, so a browser can hand back a ten-minute-old copy of the app
+even on a normal refresh. Worse, this page is opened in the morning and left
+open all day — a tab that never reloads never asks the server for anything
+again, and would run last week's code straight through a sale.
+
+So the app watches for new deploys itself. **Push as normal; nobody needs to
+know about Ctrl+Shift+R.**
+
+- A tab **left open in the background** reloads itself, so coming back to it
+  lands on the current version with no banner and no click.
+- A tab **someone is actively using** shows a green bar: *"A newer version of
+  this tool has been published"*, with **Reload now** and **later**. The page is
+  never pulled out from under a half-typed note.
+
+It checks every five minutes and whenever a tab is brought back to the front,
+which is the moment a stale page is most likely to be used.
+
+**How it knows, with no build step.** GitHub Pages ETags are
+`<deploy-id>-<file-size>`, and the deploy id is identical across every file in a
+deploy — so it changes on every push whether or not that particular file did.
+The app records it at load and compares with a `HEAD` request. No version file
+to bump, nothing to remember at deploy time, nothing to get out of step.
+
+Off `file://`, or on any server that sends no ETag, the check finds nothing to
+compare and stays silent rather than nagging.
+
 ## How it behaves
 
 **Your work never waits on the network.** Every change is written to
