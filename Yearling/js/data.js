@@ -47,15 +47,27 @@ FT.data = (function () {
      history. A yearling selling in August of year Y was foaled in Y-1, so it
      could have sold as a weanling that November or as a short yearling the
      following February. */
+  /* The mixed sales a yearling may already have been through. Loaded quietly
+     in the background so "sale history" can find a prior price.
+   *
+   * Saratoga Fall is here as well as in SALES, and that is deliberate. It is
+   * catalogued as a fall *yearling* sale but it is really a mixed one: 230 of
+   * the 281 hips in the 2025 edition were that year's foals, sold as weanlings,
+   * with the rest broodmares. Leaving it out meant a New York-bred yearling
+   * that changed hands there in October showed no prior sale at all. */
   var HISTORY_SALES = [
     { code: 'K25D', pk: 288, year: 2025, start: '2025-11-03',
       label: '2025 The November Sale', type: 'mixed', soldAs: 'Weanling' },
     { code: 'K26A', pk: 293, year: 2026, start: '2026-02-09',
       label: '2026 Kentucky Winter Mixed', type: 'mixed', soldAs: 'Short yearling' },
+    { code: 'N25C', pk: 286, year: 2025, start: '2025-10-14',
+      label: '2025 The Saratoga Fall Sale', type: 'mixed', soldAs: 'Weanling' },
     { code: 'K24D', pk: 264, year: 2024, start: '2024-11-04',
       label: '2024 The November Sale', type: 'mixed', soldAs: 'Weanling' },
     { code: 'K25A', pk: 268, year: 2025, start: '2025-02-03',
-      label: '2025 Kentucky Winter Mixed', type: 'mixed', soldAs: 'Short yearling' }
+      label: '2025 Kentucky Winter Mixed', type: 'mixed', soldAs: 'Short yearling' },
+    { code: 'N24C', pk: 262, year: 2024, start: '2024-10-15',
+      label: '2024 The Saratoga Fall Sale', type: 'mixed', soldAs: 'Weanling' }
   ];
 
   function saleByCode(code) {

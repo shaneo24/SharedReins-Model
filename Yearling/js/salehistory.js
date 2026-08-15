@@ -44,6 +44,26 @@ FT.saleHistory = (function () {
    * Prior Fasig-Tipton appearances of this exact individual, from whatever
    * sales are already loaded. Excludes the sale you're shopping.
    */
+  /**
+   * What the horse was when it went through that ring, worked out from its
+   * foaling year against the sale's.
+   *
+   * A static label per sale isn't enough for a genuinely mixed sale: Saratoga
+   * Fall is catalogued as a yearling sale but is mostly weanlings, so taking
+   * the label at face value would report a weanling purchase as a yearling
+   * one — and the whole point of this panel is the consignor's basis.
+   */
+  function soldAsFor(horse, sale, meta) {
+    if (meta && meta.soldAs) return meta.soldAs;      // sale with one clear crop
+    var saleYear = parseInt(String(sale.start || '').slice(0, 4), 10) || sale.year;
+    var foalYear = parseInt(horse.foalYear, 10);
+    if (saleYear && foalYear) {
+      if (foalYear === saleYear) return 'Weanling';
+      if (foalYear === saleYear - 1) return 'Yearling';
+    }
+    return sale.category === 'yearling' ? 'Yearling' : 'Mixed';
+  }
+
   function ftMatches(horse, loaded) {
     var key = normDam(horse.dam) + '|' + horse.foalYear;
     var out = [];
@@ -63,8 +83,7 @@ FT.saleHistory = (function () {
           saleShort: entry.sale.code,
           when: entry.sale.start || '',
           hip: o.hip,
-          soldAs: (meta && meta.soldAs) ||
-                  (entry.sale.category === 'yearling' ? 'Yearling' : 'Mixed'),
+          soldAs: soldAsFor(o, entry.sale, meta),
           price: o.sold ? o.price : null,
           rna: o.rna,
           bidTo: o.bidTo,

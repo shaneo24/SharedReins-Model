@@ -390,9 +390,18 @@ A real example — hip 20, 2026 Saratoga:
 *Fasig-Tipton* is free and needs nothing. Horses are matched on **dam + foaling
 year**, which is unique in practice since a mare has one foal a year; the sire
 is checked afterwards as a guard rather than being part of the key. The mixed
-sales this crop could have passed through — The November Sale of the previous
-year (weanlings) and Kentucky Winter Mixed of the current one (short yearlings)
-— load quietly in the background. On 2026 Saratoga that traces 18 hips.
+sales this crop could have passed through load quietly in the background: The
+November Sale of the previous year and **Saratoga Fall** (both weanlings), and
+Kentucky Winter Mixed of the current one (short yearlings). On 2026 Saratoga
+that traces 18 hips.
+
+**Saratoga Fall is catalogued as a yearling sale but is really a mixed one** —
+230 of the 281 hips in the 2025 edition were that year's foals, the rest
+broodmares. It was originally left out of the history sales for that reason,
+which hid a prior sale on **65 of the 317 hips** in the 2026 New York Bred
+catalogue, 49 of them sold. What a horse is described as having sold *as* is
+therefore worked out from its foaling year against the sale's, not taken from
+the sale's label.
 
 *Keeneland* comes through the local server, and **it matters more here than it
 did for 2YOs**: Keeneland November is where most of a crop's weanlings change
