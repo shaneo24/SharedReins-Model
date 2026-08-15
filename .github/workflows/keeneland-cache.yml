@@ -1,0 +1,83 @@
+# Keeps the Keeneland sale-history cache filled, so nobody has to run anything.
+#
+# Keeneland sends no CORS header, so the site can never fetch it in the browser.
+# This job does it on a schedule and parks the rows in Supabase; everyone who
+# opens the site just sees them. No redeploy, no manual step, no terminal.
+#
+# ---------------------------------------------------------------- setting up
+#
+#   1. Repo -> Settings -> Secrets and variables -> Actions -> New secret
+#        Name:   SR_CODE
+#        Value:  your shared access code
+#
+#   2. Edit SALES below when a new catalogue opens. That is the only line that
+#      needs touching from one season to the next.
+#
+#   The Supabase URL and public key are read from js/config.js in the repo —
+#   they are public by design, so nothing else needs to be a secret.
+#
+# Runs daily because catalogues are not static: hips are withdrawn and
+# supplements are added right up to the sale, and a mare added on Tuesday
+# should not wait a week to be looked up.
+
+name: Keeneland cache
+
+on:
+  schedule:
+    # 06:30 UTC daily — early enough that the cache is warm before anyone in
+    # Kentucky or Ireland opens the site.
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+    inputs:
+      sales:
+        description: 'Sales to fetch (space-separated, e.g. "N26A N26B 149")'
+        required: false
+        type: string
+      refresh:
+        description: 'Re-fetch mares already cached'
+        required: false
+        type: boolean
+        default: false
+
+# The sales currently worth caching. Fasig-Tipton codes are letters+digits
+# (N26A); OBS sales are numeric ids (149). Used when the run is scheduled; a
+# manual run can override it from the form above.
+env:
+  DEFAULT_SALES: 'N26A N26B'
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    # Plenty for a few hundred mares; a hung run gets cut rather than burning
+    # minutes all night.
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check the access code is set
+        env:
+          SR_CODE: ${{ secrets.SR_CODE }}
+        run: |
+          if [ -z "$SR_CODE" ]; then
+            echo "::error::SR_CODE secret is not set. Repo -> Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+
+      # Inputs go in through the environment rather than being interpolated
+      # into the script text, so a sale name can never be read as shell.
+      - name: Fetch Keeneland sale history
+        env:
+          SR_CODE: ${{ secrets.SR_CODE }}
+          INPUT_SALES: ${{ inputs.sales }}
+          INPUT_REFRESH: ${{ inputs.refresh }}
+        run: |
+          SALES="${INPUT_SALES:-$DEFAULT_SALES}"
+          REFRESH=""
+          if [ "$INPUT_REFRESH" = "true" ]; then REFRESH="--refresh"; fi
+          echo "Fetching: $SALES $REFRESH"
+          node shared/fetch-keeneland.js $SALES $REFRESH

@@ -426,6 +426,25 @@ window.__SR_SYNC__ = function (NS, APP) {
     window.addEventListener('pagehide', function () { flush(); });
   }
 
+  /* -------------------------------------------------------------- Keeneland */
+
+  /**
+   * Cached Keeneland rows for one or more mares.
+   *
+   * Resolves to a map keyed by dam key. A mare that has never been fetched is
+   * simply absent from it, which is a different answer from one present with
+   * an empty `rows` array — "we never looked" versus "we looked and Keeneland
+   * has nothing". js/salehistory.js says something different for each.
+   *
+   * Filled ahead of a sale by shared/fetch-keeneland.js. Keeneland sends no
+   * CORS header, so a hosted page can never call them directly.
+   */
+  function keeneland(dams) {
+    if (!canSync()) return Promise.reject(new Error('Not connected to shared data.'));
+    return rpc('sr_keeneland_read', { p_code: code, p_dams: dams })
+      .then(function (m) { return m || {}; });
+  }
+
   /* ------------------------------------------------------------------ read */
 
   function ratingFor(key) { return snap.ratings[key] || null; }
@@ -462,7 +481,10 @@ window.__SR_SYNC__ = function (NS, APP) {
     },
     data: function () { return snap; },
     ratingFor: ratingFor,
-    creditFor: creditFor
+    creditFor: creditFor,
+    /** Connected and able to answer — what the Keeneland cache needs. */
+    ready: canSync,
+    keeneland: keeneland
   };
 };
 

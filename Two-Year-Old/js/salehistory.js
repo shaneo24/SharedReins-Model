@@ -22,8 +22,13 @@ OBS.saleHistory = (function () {
   'use strict';
   var U = OBS.util;
 
-  var proxyState = 'unknown';   // 'unknown' | 'yes' | 'no'
-  var damCache = {};            // normalised dam -> { rows } | { error }
+  /* Where Keeneland rows come from, in preference order:
+       'local'  — serve.js proxying live, the freshest answer
+       'cache'  — the shared Supabase cache, filled by shared/fetch-keeneland.js
+       'no'     — neither, so the Keeneland leg is simply missing
+     Static hosting has no proxy, which is exactly why the cache exists. */
+  var sourceState = 'unknown';  // 'unknown' | 'local' | 'cache' | 'no'
+  var damCache = {};            // normalised dam -> { rows } | { error } | { uncached: true }
   var inflight = {};
 
   function normDam(s) {
@@ -71,35 +76,81 @@ OBS.saleHistory = (function () {
 
   /* ------------------------------------------------------------ Keeneland */
 
-  function proxyAvailable() {
-    if (proxyState !== 'unknown') return Promise.resolve(proxyState === 'yes');
-    if (location.protocol === 'file:') { proxyState = 'no'; return Promise.resolve(false); }
+  /**
+   * Which Keeneland source is available, resolved once per session.
+   *
+   * The local proxy wins when it's there: it asks Keeneland live, so it can't
+   * be out of date. Otherwise the shared cache, which is the normal path for a
+   * hosted copy and needs somebody to have run the fetch script.
+   */
+  function keenelandSource() {
+    if (sourceState !== 'unknown') return Promise.resolve(sourceState);
+
+    var viaCache = (window.OBS.sync && OBS.sync.ready()) ? 'cache' : 'no';
+
+    // No proxy can exist off disk, so don't waste a request finding out.
+    if (location.protocol === 'file:') {
+      sourceState = viaCache;
+      return Promise.resolve(sourceState);
+    }
     return fetch('/api/ping')
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { proxyState = j && j.keeneland ? 'yes' : 'no'; return proxyState === 'yes'; })
-      .catch(function () { proxyState = 'no'; return false; });
+      .then(function (j) { sourceState = (j && j.keeneland) ? 'local' : viaCache; return sourceState; })
+      .catch(function () { sourceState = viaCache; return sourceState; });
   }
 
-  /** All Keeneland rows for a dam, cached. One request per mare, ever. */
+  /** Back-compat for anything still asking the old yes/no question. */
+  function proxyAvailable() {
+    return keenelandSource().then(function (s) { return s !== 'no'; });
+  }
+
+  /**
+   * All Keeneland rows for a dam, cached for the session. One request per
+   * mare, ever — a mare with three foals in the sale is still one lookup.
+   *
+   * Resolves to an array. A mare the shared cache has never been asked about
+   * rejects with `.uncached`, because an empty array there would read as
+   * "Keeneland has nothing on her", which is a different and much stronger
+   * claim than "nobody has looked yet".
+   */
   function keenelandByDam(dam) {
     var key = normDam(dam);
     if (!key) return Promise.resolve([]);
     if (damCache[key]) {
-      return damCache[key].error ? Promise.reject(new Error(damCache[key].error))
-                                 : Promise.resolve(damCache[key].rows);
+      var hit = damCache[key];
+      if (hit.rows) return Promise.resolve(hit.rows);
+      var err = new Error(hit.error || 'not looked up yet');
+      if (hit.uncached) err.uncached = true;
+      return Promise.reject(err);
     }
     if (inflight[key]) return inflight[key];
 
-    inflight[key] = fetch('/api/keeneland?dam=' + encodeURIComponent(dam))
-      .then(function (r) { return r.json(); })
-      .then(function (j) {
-        if (j.error) throw new Error(j.error);
-        var rows = Array.isArray(j.rows) ? j.rows : [];
-        damCache[key] = { rows: rows };
-        return rows;
-      })
+    inflight[key] = keenelandSource().then(function (src) {
+      if (src === 'local') {
+        return fetch('/api/keeneland?dam=' + encodeURIComponent(dam))
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j.error) throw new Error(j.error);
+            return Array.isArray(j.rows) ? j.rows : [];
+          });
+      }
+      if (src === 'cache') {
+        return OBS.sync.keeneland([dam]).then(function (map) {
+          var entry = map[key];
+          if (!entry) {
+            var miss = new Error('not in the shared cache');
+            miss.uncached = true;
+            throw miss;
+          }
+          return Array.isArray(entry.rows) ? entry.rows : [];
+        });
+      }
+      throw new Error('no Keeneland source');
+    })
+      .then(function (rows) { damCache[key] = { rows: rows }; return rows; })
       .catch(function (e) {
-        damCache[key] = { error: e.message || 'lookup failed' };
+        damCache[key] = e.uncached ? { uncached: true, error: e.message }
+                                   : { error: e.message || 'lookup failed' };
         throw e;
       })
       .then(function (v) { delete inflight[key]; return v; },
@@ -120,7 +171,18 @@ OBS.saleHistory = (function () {
         // Searching by dam returns every foal she's sent through Keeneland,
         // so narrow to this individual by foaling year, then confirm on sire.
         if (String(r.yob || '').trim() !== String(horse.foalYear).trim()) return false;
-        return !r.sire || normDam(r.sire) === normDam(horse.sire);
+        if (r.sire && normDam(r.sire) !== normDam(horse.sire)) return false;
+
+        /* Drop sales that haven't happened yet. Keeneland flags an open
+           catalogue with currentsale = -1 and a completed one with 0, and a
+           yearling at Saratoga in August is very often also catalogued for
+           Keeneland September — it came back with sale_price -1 and a date a
+           month in the future. Listing that under prior sales would invent a
+           pinhook basis out of an entry nobody has bid on.
+
+           The flag is the signal, not the price: four of the completed sales
+           in the sample also carry a negative price, being withdrawals. */
+        return String(r.currentsale || '0').trim() === '0';
       }).map(function (r) {
         var price = money(r.sale_price);
         var isRna = String(r.rna_indicator || '').toUpperCase() === 'Y';
@@ -151,13 +213,16 @@ OBS.saleHistory = (function () {
    * OBS matches resolve immediately; Keeneland resolves when the proxy answers.
    */
   function forHorse(horse, loaded) {
-    var obs = obsMatches(horse, loaded);
-    return proxyAvailable().then(function (ok) {
-      if (!ok) return { entries: obs, keeneland: 'unavailable' };
+    var ft = ftMatches(horse, loaded);
+    return keenelandSource().then(function (src) {
+      if (src === 'no') return { entries: ft, keeneland: 'unavailable' };
       return keenelandMatches(horse).then(function (kee) {
-        return { entries: obs.concat(kee), keeneland: 'ok' };
+        return { entries: ft.concat(kee), keeneland: 'ok', via: src };
       }).catch(function (e) {
-        return { entries: obs, keeneland: 'error', error: e.message };
+        // A mare nobody has fetched yet is not a failure — it is a gap with a
+        // specific fix, and the panel says which.
+        if (e.uncached) return { entries: ft, keeneland: 'uncached' };
+        return { entries: ft, keeneland: 'error', error: e.message };
       });
     });
   }
@@ -173,6 +238,7 @@ OBS.saleHistory = (function () {
     obsMatches: obsMatches,
     keenelandByDam: keenelandByDam,
     keenelandMatches: keenelandMatches,
+    keenelandSource: keenelandSource,
     proxyAvailable: proxyAvailable,
     forHorse: forHorse,
     sortEntries: sortEntries

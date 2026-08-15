@@ -122,6 +122,92 @@ it. Rotation is the right move when someone leaves or the code gets loose — ju
 don't read it as "they can no longer see what they already saw." If that matters,
 you want per-person accounts, not a shared code.
 
+## Keeneland sale history
+
+Keeneland's search returns clean JSON but sends **no CORS header**, so a browser
+can never call it directly. Locally `serve.js` proxies it; a copy on GitHub
+Pages has no server to do that, and the Keeneland leg of sale history vanishes —
+which matters, because Keeneland November is where most of a crop's weanlings
+change hands.
+
+So the rows are fetched outside the browser and parked in Supabase, where the
+site reads them.
+
+### Nobody has to run anything
+
+A GitHub Action does it daily —
+[`.github/workflows/keeneland-cache.yml`](../.github/workflows/keeneland-cache.yml).
+People open the site and the data is simply there.
+
+Two things to set up, once:
+
+**1. Add the access code as a repository secret.** Repo → **Settings** →
+**Secrets and variables** → **Actions** → **New repository secret**, named
+`SR_CODE`. It never goes in the repo.
+
+**2. Set which sales to cache** — the `DEFAULT_SALES` line at the top of the
+workflow. That's the only line to touch when a new catalogue opens.
+
+The Supabase URL and public key come from `js/config.js` in the repo, so nothing
+else needs to be a secret.
+
+You can also trigger it by hand from the **Actions** tab, optionally naming
+different sales or ticking *refresh* to re-fetch mares already cached.
+
+Daily rather than once, because catalogues aren't static — hips are withdrawn
+and supplements added right up to the sale, and a mare added on Tuesday
+shouldn't wait a week to be looked up.
+
+> **One caveat:** GitHub disables scheduled workflows on a repository with no
+> activity for 60 days, and emails you when it does. A single commit re-enables
+> it. Worth knowing before a sale you were counting on it for.
+
+### Running it by hand
+
+Same script, if you'd rather not wait for the schedule or want it before the
+first run. Set the code so it stays out of your shell history:
+
+```powershell
+$env:SR_CODE = 'your-access-code'
+```
+
+```bash
+node shared/fetch-keeneland.js N26A
+```
+
+Several sales at once share one de-duplicated mare list:
+
+```bash
+node shared/fetch-keeneland.js N26A N26B 149
+```
+
+About a minute for a 226-hip sale — one request per *mare*, not per hip, and
+mares already cached are skipped. `--refresh` re-fetches them anyway, `--limit N`
+stops early for a quick trial, and `--dry-run` writes to a JSON file without
+touching Supabase or needing a code at all.
+
+A sale code that doesn't resolve is skipped with a warning rather than failing
+the run, so one stale entry in `DEFAULT_SALES` can't cost you the others.
+
+**The app prefers a live proxy when there is one.** Running `node serve.js`
+still queries Keeneland directly, so your own machine is never limited to what
+was last cached.
+
+**Three states, deliberately distinguished.** "Found nothing" is only said when
+Keeneland was actually asked. A mare nobody has fetched reads *"isn't in the
+shared Keeneland cache yet"* with the command to fix it; with no cache and no
+proxy it says Keeneland wasn't checked at all. Collapsing these would turn "we
+didn't look" into "this horse never sold", which is a confident lie about a
+consignor's basis.
+
+**Sales that haven't happened yet are excluded.** A yearling at Saratoga in
+August is often also catalogued for Keeneland September, and that entry comes
+back from the same search. Keeneland flags it with `currentsale = -1`; the app
+keeps only `0`. Without that, hip 7 of the 2026 Saratoga sale showed a September
+2026 sale as prior history — a pinhook basis for a horse nobody has bid on yet.
+The flag is the signal rather than the price, since completed sales carry
+negative prices too when a horse was withdrawn.
+
 ## How it behaves
 
 **Your work never waits on the network.** Every change is written to
@@ -195,10 +281,13 @@ config: grades stay in that browser, but further changes stop reaching anyone.
 ## Files
 
 ```
-shared/schema.sql       the whole backend — tables, the access-code gate,
-                        and the two functions the apps call
-shared/sync.js          master copy of the transport layer
-shared/sync-build.js    copies it into both apps
+shared/schema.sql          the whole backend — tables, the access-code gate,
+                           and the functions the apps call
+shared/sync.js             master copy of the transport layer
+shared/sync-build.js       copies it into both apps
+shared/fetch-keeneland.js  fills the Keeneland cache for a sale
+.github/workflows/keeneland-cache.yml
+                           runs that daily, so nobody has to
 ```
 
 `js/sync.js` in each app is **generated**. Edit `shared/sync.js` and run:

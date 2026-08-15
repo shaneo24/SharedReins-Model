@@ -513,9 +513,16 @@ FT.ui = (function () {
 
     var note = '';
     if (state.keeneland === 'unavailable') {
-      note = '<div class="hist-line dim">Keeneland needs the local server — ' +
-             'run <code>node serve.js</code> and open it there to include Keeneland November, ' +
-             'where most of this crop\'s weanlings sold.</div>';
+      note = '<div class="hist-line dim">Keeneland wasn\'t checked. Either run ' +
+             '<code>node serve.js</code> and open it there, or fill the shared cache with ' +
+             '<code>node shared/fetch-keeneland.js</code> — Keeneland November is where most ' +
+             'of this crop\'s weanlings sold.</div>';
+    } else if (state.keeneland === 'uncached') {
+      // The cache is reachable, this mare simply isn't in it — which is a
+      // one-command fix rather than a missing feature, so say which command.
+      note = '<div class="hist-line dim">This mare isn\'t in the shared Keeneland cache yet. ' +
+             'Run <code>node shared/fetch-keeneland.js ' + esc(h.saleId || '&lt;sale&gt;') +
+             '</code> to fill it for the whole sale.</div>';
     } else if (state.keeneland === 'error') {
       note = '<div class="hist-line dim">Keeneland lookup failed: ' + esc(state.error || '') + '</div>';
     }

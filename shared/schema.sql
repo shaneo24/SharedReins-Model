@@ -144,6 +144,30 @@ create table if not exists sire_lists (
   primary key (app, id)
 );
 
+-- Keeneland sale history, cached.
+--
+-- Keeneland's search returns clean JSON but sends no CORS header, so a browser
+-- can never call it directly — a hosted copy of these apps has no way to reach
+-- it. Rather than proxy every lookup at run time, the rows are fetched ahead of
+-- a sale by shared/fetch-keeneland.js and parked here, which means the deployed
+-- site needs no server of its own and one person's fetch serves everybody.
+--
+-- NOT keyed by app. A mare's produce record is the same fact whichever
+-- catalogue you are reading, so the yearling and 2YO models share these rows —
+-- the one thing in this schema that legitimately crosses between them.
+--
+-- `rows` holds Keeneland's payload untouched. Reshaping it here would put a
+-- second copy of that mapping somewhere js/salehistory.js could not see, and
+-- the client already knows how to read the raw form.
+create table if not exists keeneland_cache (
+  dam_key     text primary key,        -- upper-case, letters and digits only
+  dam         text not null,           -- as it was searched, for display
+  rows        jsonb not null,          -- raw Keeneland rows; [] is a real answer
+  fetched_at  timestamptz not null default now()
+);
+
+alter table keeneland_cache enable row level security;
+
 -- Every table is locked shut to the anon key. The functions below are the
 -- only way in.
 alter table ratings         enable row level security;
@@ -359,11 +383,119 @@ begin
 end;
 $$;
 
--- The anon key may call these two functions and nothing else. Both check the
--- code before they touch a table, so possession of the anon key alone —
--- which is public by design, and sits in the page source — gets you nothing.
+-- ------------------------------------------------------------- Keeneland
+
+-- The one definition of how a mare's name becomes a key. js/salehistory.js has
+-- the same rule in `normDam`; keeping the authoritative copy here means a read
+-- and a write can never disagree about which row they mean.
+create or replace function sr_dam_key(p_dam text)
+returns text
+language sql
+immutable
+set search_path = public
+as $$ select upper(regexp_replace(coalesce(p_dam, ''), '[^A-Za-z0-9]', '', 'g')); $$;
+
+/*
+ * Cached Keeneland rows for one or more mares.
+ *
+ * Returns a map keyed by dam key. A mare that is absent from the map has never
+ * been looked up; a mare present with `rows: []` was looked up and genuinely
+ * has nothing at Keeneland. The app says something different in each case, and
+ * conflating them would turn "we didn't check" into "this horse never sold",
+ * which is a confident lie about a consignor's basis.
+ */
+create or replace function sr_keeneland_read(p_code text, p_dams text[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  result jsonb;
+begin
+  if not sr_check_code(p_code) then
+    raise exception 'Access code not accepted' using errcode = '28000';
+  end if;
+
+  select coalesce(jsonb_object_agg(k.dam_key,
+           jsonb_build_object('rows', k.rows, 'fetchedAt', k.fetched_at)), '{}'::jsonb)
+    into result
+    from keeneland_cache k
+   where k.dam_key = any (select sr_dam_key(d) from unnest(p_dams) d);
+
+  return result;
+end;
+$$;
+
+/*
+ * Store what a fetch found. `p_entries` is [{ dam, rows }, …].
+ *
+ * Re-fetching a mare overwrites her row, so the script can be re-run over a
+ * sale safely — Keeneland results change as sales are catalogued, and the
+ * newest answer is the one worth keeping.
+ */
+create or replace function sr_keeneland_write(p_code text, p_entries jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  e       jsonb;
+  applied int := 0;
+begin
+  if not sr_check_code(p_code) then
+    raise exception 'Access code not accepted' using errcode = '28000';
+  end if;
+
+  for e in select * from jsonb_array_elements(p_entries)
+  loop
+    if sr_dam_key(e->>'dam') = '' then continue; end if;
+
+    insert into keeneland_cache (dam_key, dam, rows, fetched_at)
+    values (sr_dam_key(e->>'dam'), e->>'dam',
+            coalesce(e->'rows', '[]'::jsonb), now())
+    on conflict (dam_key) do update set
+      dam = excluded.dam,
+      rows = excluded.rows,
+      fetched_at = now();
+
+    applied := applied + 1;
+  end loop;
+
+  return jsonb_build_object('applied', applied, 'now', now());
+end;
+$$;
+
+-- How many mares are cached, and how fresh. Lets the fetch script report
+-- progress and skip mares it already has.
+create or replace function sr_keeneland_status(p_code text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not sr_check_code(p_code) then
+    raise exception 'Access code not accepted' using errcode = '28000';
+  end if;
+  return (select jsonb_build_object(
+    'mares', count(*),
+    'withRows', count(*) filter (where jsonb_array_length(rows) > 0),
+    'oldest', min(fetched_at),
+    'newest', max(fetched_at)) from keeneland_cache);
+end;
+$$;
+
+-- The anon key may call these functions and nothing else. Every one checks the
+-- code before it touches a table, so possession of the anon key alone — which
+-- is public by design, and sits in the page source — gets you nothing.
 grant execute on function sr_read(text, text, timestamptz) to anon, authenticated;
 grant execute on function sr_write(text, text, text, jsonb) to anon, authenticated;
+grant execute on function sr_keeneland_read(text, text[]) to anon, authenticated;
+grant execute on function sr_keeneland_write(text, jsonb) to anon, authenticated;
+grant execute on function sr_keeneland_status(text) to anon, authenticated;
+revoke all on function sr_dam_key(text) from public, anon, authenticated;
 
 -- --------------------------------------------------------------- changing
 -- To rotate the access code later:
