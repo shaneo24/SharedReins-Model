@@ -478,8 +478,8 @@ FT.ui = (function () {
           '</div>';
         }).join('')
       : (partial
-          ? '<div class="hist-line dim">Nothing at Fasig-Tipton. Keeneland wasn\'t checked, ' +
-            'so this horse may still have sold as a weanling.</div>'
+          ? '<div class="hist-line dim">Nothing at Fasig-Tipton or OBS. Keeneland wasn\'t ' +
+            'checked, so this horse may still have sold as a weanling.</div>'
           : '<div class="hist-line dim">No prior sale found — this looks like a first trip ' +
             'through the ring.</div>');
 

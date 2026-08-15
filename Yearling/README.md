@@ -385,7 +385,7 @@ A real example — hip 20, 2026 Saratoga:
 | Fasig-Tipton November 2025 | Weanling | $425,000 |
 | **Fasig-Tipton Saratoga 2026** | Yearling | — |
 
-**Two sources.**
+**Three sources.**
 
 *Fasig-Tipton* is free and needs nothing. Horses are matched on **dam + foaling
 year**, which is unique in practice since a mare has one foal a year; the sire
@@ -402,6 +402,19 @@ which hid a prior sale on **65 of the 317 hips** in the 2026 New York Bred
 catalogue, 49 of them sold. What a horse is described as having sold *as* is
 therefore worked out from its foaling year against the sale's, not taken from
 the sale's label.
+
+*OBS* is free and needs nothing either — their API echoes back whatever Origin
+it is given, so the browser can call it directly. Ocala's **Winter Mixed** sale
+in late January takes short yearlings, so a colt catalogued at Saratoga in
+August may already have been through that ring seven months earlier. Hip 322 of
+the 2026 New York Bred sale had sold as a weanling for $80,000 and then **RNA'd
+at OBS for $130,000** — the second half of that story was invisible until OBS
+was added as a source, because the model only ever looked at Fasig-Tipton and
+Keeneland.
+
+Five hips of that 317-hip catalogue trace to OBS Winter Mixed; none of the 226
+at Saratoga do. A small number, but an RNA at $130,000 is exactly the kind of
+thing you want to know before bidding.
 
 *Keeneland* comes through the local server, and **it matters more here than it
 did for 2YOs**: Keeneland November is where most of a crop's weanlings change

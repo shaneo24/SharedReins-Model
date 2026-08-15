@@ -97,6 +97,65 @@ FT.saleHistory = (function () {
     return out;
   }
 
+  /* ------------------------------------------------------------------ OBS */
+  /* Ocala's Winter Mixed takes short yearlings in late January, so a yearling
+     catalogued in August may already have been through that ring. Matched the
+     same way as everything else — dam plus foaling year, with the sire as a
+     guard. Their API is CORS-open, so this is a plain fetch with no proxy.
+
+     Cached per sale for the session: one request covers every hip. */
+  var obsCache = {};
+  var obsInflight = {};
+
+  function obsSales(saleId) {
+    if (obsCache[saleId]) return Promise.resolve(obsCache[saleId]);
+    if (obsInflight[saleId]) return obsInflight[saleId];
+
+    var metas = FT.data.obsHistoryFor(saleId);
+    if (!metas.length) { obsCache[saleId] = []; return Promise.resolve([]); }
+
+    obsInflight[saleId] = Promise.all(metas.map(function (m) {
+      // One unreachable OBS sale must not cost the others, or the Fasig and
+      // Keeneland legs that have already resolved.
+      return FT.data.fetchObsSale(m).catch(function () { return null; });
+    })).then(function (sales) {
+      var ok = sales.filter(Boolean);
+      obsCache[saleId] = ok;
+      delete obsInflight[saleId];
+      return ok;
+    });
+    return obsInflight[saleId];
+  }
+
+  function obsMatches(horse) {
+    return obsSales(horse.saleId).then(function (sales) {
+      var out = [];
+      sales.forEach(function (s) {
+        s.horses.forEach(function (o) {
+          if (normDam(o.damRaw) !== normDam(horse.dam)) return;
+          if (String(o.foalYear).trim() !== String(horse.foalYear).trim()) return;
+          if (o.sireRaw && normDam(o.sireRaw) !== normDam(horse.sire)) return;
+          out.push({
+            source: 'OBS',
+            sale: s.meta.label,
+            saleShort: String(s.meta.id),
+            when: s.meta.start,
+            hip: o.hip,
+            soldAs: s.meta.soldAs,
+            price: o.price,
+            rna: o.rna,
+            bidTo: o.bidTo,
+            out: o.out,
+            buyer: o.buyer,
+            consignor: o.consignor,
+            link: ''
+          });
+        });
+      });
+      return out;
+    });
+  }
+
   /* ------------------------------------------------------------ Keeneland */
 
   /**
@@ -238,16 +297,31 @@ FT.saleHistory = (function () {
    */
   function forHorse(horse, loaded) {
     var ft = ftMatches(horse, loaded);
-    return keenelandSource().then(function (src) {
-      if (src === 'no') return { entries: ft, keeneland: 'unavailable' };
-      return keenelandMatches(horse).then(function (kee) {
-        return { entries: ft.concat(kee), keeneland: 'ok', via: src };
+
+    // OBS resolves independently of Keeneland, and neither is allowed to sink
+    // the other: a horse's Fasig-Tipton history is already in hand and should
+    // still be shown if either lookup fails.
+    var obs = obsMatches(horse).catch(function () { return []; });
+
+    var kee = keenelandSource().then(function (src) {
+      if (src === 'no') return { rows: [], state: 'unavailable' };
+      return keenelandMatches(horse).then(function (rows) {
+        return { rows: rows, state: 'ok', via: src };
       }).catch(function (e) {
         // A mare nobody has fetched yet is not a failure — it is a gap with a
         // specific fix, and the panel says which.
-        if (e.uncached) return { entries: ft, keeneland: 'uncached' };
-        return { entries: ft, keeneland: 'error', error: e.message };
+        if (e.uncached) return { rows: [], state: 'uncached' };
+        return { rows: [], state: 'error', error: e.message };
       });
+    });
+
+    return Promise.all([obs, kee]).then(function (r) {
+      return {
+        entries: ft.concat(r[0], r[1].rows),
+        keeneland: r[1].state,
+        via: r[1].via,
+        error: r[1].error
+      };
     });
   }
 
@@ -260,6 +334,7 @@ FT.saleHistory = (function () {
   return {
     normDam: normDam,
     ftMatches: ftMatches,
+    obsMatches: obsMatches,
     keenelandByDam: keenelandByDam,
     keenelandMatches: keenelandMatches,
     keenelandSource: keenelandSource,

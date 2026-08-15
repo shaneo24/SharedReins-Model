@@ -126,12 +126,21 @@ async function fasigDams(code) {
   return { label: list[0].name || code, dams: rows.map(h => h.dam) };
 }
 
-/** Every dam in an OBS sale, e.g. 149. */
+/**
+ * Every dam in an OBS sale, e.g. 149.
+ *
+ * OBS nests the catalogue under `sale_hip` and names the mare `dam_name` —
+ * not `horses` / `dam` as Fasig-Tipton does. Reading the wrong field here
+ * looked exactly like an empty sale, so every OBS id was quietly skipped.
+ */
 async function obsDams(id) {
   const data = await getJson(OBS_API + id + '?is_digital=false', 'OBS');
-  const rows = data.horses || data.data || (Array.isArray(data) ? data : []);
+  const rows = data.sale_hip || data.horses || (Array.isArray(data) ? data : []);
   if (!rows.length) throw new Error(`No horses in OBS sale "${id}".`);
-  return { label: data.sale_name || ('OBS sale ' + id), dams: rows.map(h => h.dam) };
+  return {
+    label: data.sale_name || ('OBS sale ' + id),
+    dams: rows.map(h => h.dam_name || h.dam)
+  };
 }
 
 function damKey(s) {

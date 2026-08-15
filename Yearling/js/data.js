@@ -99,6 +99,79 @@ FT.data = (function () {
     }).map(function (s) { return s.code; });
   }
 
+  /* ------------------------------------------------------------------ OBS */
+  /*
+   * Ocala Breeders' Sales — a third auction house, and a third place a
+   * yearling may already have been sold.
+   *
+   * Their Winter Mixed sale in late January takes short yearlings, so a colt
+   * catalogued at Saratoga in August can have been through the OBS ring seven
+   * months earlier. Hip 322 of the 2026 New York Bred sale RNA'd there at
+   * $130,000 and this model showed no prior sale at all, because it only ever
+   * looked at Fasig-Tipton and Keeneland.
+   *
+   * Fetched straight from the browser: the OBS API echoes back whatever Origin
+   * it is given, so unlike Keeneland it needs no proxy and no cache.
+   */
+  var OBS_API = 'https://obssales.com/wp-json/obs-catalog-wp-plugin/v1/horse-sales/';
+
+  var OBS_HISTORY = [
+    { id: 147, year: 2026, start: '2026-01-27',
+      label: '2026 OBS Winter Mixed', soldAs: 'Short yearling' },
+    { id: 140, year: 2025, start: '2025-01-28',
+      label: '2025 OBS Winter Mixed', soldAs: 'Short yearling' }
+  ];
+
+  /** The OBS mixed sales a yearling from this sale could have passed through. */
+  function obsHistoryFor(code) {
+    var target = saleByCode(code);
+    if (!target) return [];
+    // Winter Mixed runs in January of the same year as a summer yearling sale,
+    // where that crop shows up as short yearlings.
+    return OBS_HISTORY.filter(function (s) { return s.year === target.year; });
+  }
+
+  function obsSaleUrl(id) { return OBS_API + id + '?is_digital=false'; }
+
+  /**
+   * One OBS sale, reduced to what sale history needs.
+   *
+   * Deliberately not the full normalisation the 2YO model does — nothing here
+   * is scored or filtered, it is only matched against and printed. The outcome
+   * fields are read exactly as that model reads them: `in_out_status` 'O' is a
+   * withdrawal, `rna_summary_indicator` 'Y' is an RNA whose figure lives in
+   * `sale_price_rna` (and whose `hammer_price` is negative), and anything else
+   * with a positive hammer price is a sale.
+   */
+  function fetchObsSale(meta) {
+    return getJson(obsSaleUrl(meta.id)).then(function (data) {
+      var rows = (data && data.sale_hip) || [];
+      return {
+        meta: meta,
+        horses: rows.map(function (r) {
+          var isOut = r.in_out_status === 'O';
+          var rna = r.rna_summary_indicator === 'Y';
+          var hammer = num(r.hammer_price);
+          var rnaAmt = num(r.sale_price_rna);
+          var sold = !isOut && !rna && hammer !== null && hammer > 0;
+          return {
+            hip: String(r.hip_number || ''),
+            sireRaw: String(r.sire_name || '').trim().toUpperCase(),
+            damRaw: String(r.dam_name || '').trim().toUpperCase(),
+            foalYear: String(r.foaling_year || ''),
+            consignor: U.titleCase(r.consignor_sort || r.consignor_name || ''),
+            out: isOut,
+            rna: rna,
+            price: sold ? hammer : null,
+            bidTo: rna ? (rnaAmt || (hammer !== null ? Math.abs(hammer) : null)) : null,
+            buyer: r.buyer_name && r.buyer_name !== 'RNA' && r.buyer_name !== 'OUT'
+              ? U.titleCase(r.buyer_name) : ''
+          };
+        })
+      };
+    });
+  }
+
   function saleUrl(code) { return API + 'sales/?sale_identifier=' + encodeURIComponent(code); }
   function horsesUrl(pk) { return API + 'horses/?sale=' + pk; }
   function updatesUrl(pk) { return API + 'updates/?horse__sale_id=' + pk; }
@@ -362,6 +435,9 @@ FT.data = (function () {
     saleByCode: saleByCode,
     historySalesFor: historySalesFor,
     defaultRefSales: defaultRefSales,
+    OBS_HISTORY: OBS_HISTORY,
+    obsHistoryFor: obsHistoryFor,
+    fetchObsSale: fetchObsSale,
     saleUrl: saleUrl,
     horsesUrl: horsesUrl,
     updatesUrl: updatesUrl,

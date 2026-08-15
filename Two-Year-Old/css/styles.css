@@ -873,6 +873,17 @@ h4 .media-open { margin-left: 8px; font-weight: 400; text-transform: none; lette
 .hist-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 .hist-price { justify-self: end; }
 
+/* The price is the number you actually act on in this block, so it gets more
+   weight than the surrounding text rather than less. Scoped to .hist-price on
+   purpose: the same .tag style carries the Result column in the main table,
+   where a pill this size would crowd the row. */
+.hist-price .tag {
+  font-size: 12.5px;
+  font-weight: 650;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
 .media-pane {
   background: var(--bg);
   border: 1px solid var(--line-soft);
