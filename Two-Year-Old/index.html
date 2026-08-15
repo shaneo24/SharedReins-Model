@@ -62,31 +62,6 @@
 
     <section class="panel">
       <h2 class="panel-title">
-        Model weights
-        <button id="btnResetWeights" class="link-btn">reset</button>
-      </h2>
-      <div id="weights" class="weights"></div>
-      <div class="panel-note" id="weightNote"></div>
-
-      <details class="sub">
-        <summary>Scoring options</summary>
-        <label class="field">
-          <span>Horses you haven't rated yet</span>
-          <select id="optUnrated">
-            <option value="exclude">Score on the other factors</option>
-            <option value="neutral">Score the missing rating as neutral</option>
-          </select>
-        </label>
-        <div class="panel-note">
-          Breeze visual and Conformation are both your own eye. Until you enter
-          them, a horse is scored on whatever else is known.
-        </div>
-
-      </details>
-    </section>
-
-    <section class="panel">
-      <h2 class="panel-title">
         Filters
         <button id="btnClearFilters" class="link-btn">clear all</button>
       </h2>
@@ -232,6 +207,31 @@
         <span>Minimum score <em id="fScoreMinVal">any</em></span>
         <input id="fScoreMin" type="range" min="0" max="100" step="1" value="0">
       </label>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title">
+        Model weights
+        <button id="btnResetWeights" class="link-btn">reset</button>
+      </h2>
+      <div id="weights" class="weights"></div>
+      <div class="panel-note" id="weightNote"></div>
+
+      <details class="sub">
+        <summary>Scoring options</summary>
+        <label class="field">
+          <span>Horses you haven't rated yet</span>
+          <select id="optUnrated">
+            <option value="exclude">Score on the other factors</option>
+            <option value="neutral">Score the missing rating as neutral</option>
+          </select>
+        </label>
+        <div class="panel-note">
+          Breeze visual and Conformation are both your own eye. Until you enter
+          them, a horse is scored on whatever else is known.
+        </div>
+
+      </details>
     </section>
 
     <section class="panel">

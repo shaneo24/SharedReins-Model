@@ -306,34 +306,6 @@ FT.ui = (function () {
 
   /* ---------------------------------------------------------------- detail */
 
-  /** The score breakdown. Split out so grading can refresh it without
-      touching the media pane below (which may hold a playing video). */
-  function componentsHtml(h) {
-    var s = h._score || { components: [], coverage: 1 };
-
-    var comps = s.components.map(function (c) {
-      var v = c.value;
-      return '<div class="comp' + (c.applied ? '' : ' is-off') + '">' +
-        '<div class="comp-head">' +
-          '<b>' + esc(c.label) + '</b>' +
-          '<span class="comp-w">weight ' + c.weight + '</span>' +
-          '<span class="comp-v">' + (v === null ? 'n/a' : v.toFixed(0)) + '</span>' +
-        '</div>' +
-        '<div class="comp-bar"><i style="width:' + (v === null ? 0 : U.clamp(v, 0, 100)) + '%"></i></div>' +
-        '<div class="comp-detail">' + esc(c.detail || '') + '</div>' +
-      '</div>';
-    }).join('');
-
-    var coverageWarn = s.coverage < 0.001
-      ? '<div class="coverage-warn">No score yet — rate this horse below and it enters the ranking.</div>'
-      : s.coverage < 0.999
-        ? '<div class="coverage-warn">Scored on ' + Math.round(s.coverage * 100) +
-          '% of the model — you haven\'t rated the rest.</div>'
-        : '';
-
-    return comps + coverageWarn;
-  }
-
   /* Which media a hip has, in the order the tabs should appear. The photo
      leads because it's small and it's what you look at first; the walk video
      is a Vimeo embed that only starts streaming once you open its tab. */
@@ -536,24 +508,25 @@ FT.ui = (function () {
 
     return '' +
     '<tr class="detail" data-detail-for="' + esc(h.key) + '"><td colspan="12"><div class="detail-inner">' +
+      /* This whole column is what you *enter* about a horse — notes, lists,
+         vet, ratings — while the right-hand column stays purely what the sale
+         tells you. Notes lead because they are what you reach for first with a
+         horse in front of you; the ratings sit at the bottom because you make
+         them last, having looked. */
       '<div class="detail-block">' +
-        '<h4>Why it scores what it scores</h4>' +
-        '<div data-comp-block="' + esc(h.key) + '">' + componentsHtml(h) + '</div>' +
+        '<h4>Notes</h4>' +
+        '<textarea class="note-box" placeholder="Notes — walk, shoulder, knees, films, price ceiling…" ' +
+                  'data-note="' + esc(h.key) + '">' + esc(note && note.notes || '') + '</textarea>' +
 
         '<h4 style="margin-top:14px">Short lists &amp; vet</h4>' +
         listChips(h.key) +
         '<div class="vet-row">' +
           vetSelect(h.key, 'vet-select vet-select-lg') +
         '</div>' +
+
         '<h4 style="margin-top:12px">Repository</h4>' +
         repositoryHtml(h) +
-        '<textarea class="note-box" placeholder="Notes — walk, shoulder, knees, films, price ceiling…" ' +
-                  'data-note="' + esc(h.key) + '">' + esc(note && note.notes || '') + '</textarea>' +
 
-        /* The sliders live at the bottom of this column rather than the other
-           one, so everything you *enter* about a horse — lists, vet, notes,
-           the two ratings — sits in one place, and the right-hand column stays
-           purely what the sale tells you. */
         '<h4 style="margin-top:14px">Your ratings</h4>' +
         gradeRow('Conformation', 'conf', h.key, conf,
           h.hasWalkVideo ? 'photo + walk video' : (h.hasPhoto ? 'photo only' : 'no media')) +
@@ -701,7 +674,6 @@ FT.ui = (function () {
     syncPickerCount: syncPickerCount,
     renderRows: renderRows,
     detailHtml: detailHtml,
-    componentsHtml: componentsHtml,
     saleHistoryHtml: saleHistoryHtml,
     mediaHtml: mediaHtml,
     mediaTabs: mediaTabs,

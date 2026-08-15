@@ -213,16 +213,16 @@ OBS.saleHistory = (function () {
    * OBS matches resolve immediately; Keeneland resolves when the proxy answers.
    */
   function forHorse(horse, loaded) {
-    var ft = ftMatches(horse, loaded);
+    var prior = obsMatches(horse, loaded);
     return keenelandSource().then(function (src) {
-      if (src === 'no') return { entries: ft, keeneland: 'unavailable' };
+      if (src === 'no') return { entries: prior, keeneland: 'unavailable' };
       return keenelandMatches(horse).then(function (kee) {
-        return { entries: ft.concat(kee), keeneland: 'ok', via: src };
+        return { entries: prior.concat(kee), keeneland: 'ok', via: src };
       }).catch(function (e) {
         // A mare nobody has fetched yet is not a failure — it is a gap with a
         // specific fix, and the panel says which.
-        if (e.uncached) return { entries: ft, keeneland: 'uncached' };
-        return { entries: ft, keeneland: 'error', error: e.message };
+        if (e.uncached) return { entries: prior, keeneland: 'uncached' };
+        return { entries: prior, keeneland: 'error', error: e.message };
       });
     });
   }

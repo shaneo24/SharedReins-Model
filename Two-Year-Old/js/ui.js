@@ -267,34 +267,6 @@ OBS.ui = (function () {
 
   /* ---------------------------------------------------------------- detail */
 
-  /** The score breakdown. Split out so grading can refresh it without
-      touching the media pane below (which may hold a playing video). */
-  function componentsHtml(h) {
-    var s = h._score || { components: [], coverage: 1 };
-
-    var comps = s.components.map(function (c) {
-      var v = c.value;
-      return '<div class="comp' + (c.applied ? '' : ' is-off') + '">' +
-        '<div class="comp-head">' +
-          '<b>' + esc(c.label) + '</b>' +
-          '<span class="comp-w">weight ' + c.weight + '</span>' +
-          '<span class="comp-v">' + (v === null ? 'n/a' : v.toFixed(0)) + '</span>' +
-        '</div>' +
-        '<div class="comp-bar"><i style="width:' + (v === null ? 0 : U.clamp(v, 0, 100)) + '%"></i></div>' +
-        '<div class="comp-detail">' + esc(c.detail || '') + '</div>' +
-      '</div>';
-    }).join('');
-
-    var coverageWarn = s.coverage < 0.001
-      ? '<div class="coverage-warn">No score yet — rate this horse below and it enters the ranking.</div>'
-      : s.coverage < 0.999
-        ? '<div class="coverage-warn">Scored on ' + Math.round(s.coverage * 100) +
-          '% of the model — you haven\'t rated the rest.</div>'
-        : '';
-
-    return comps + coverageWarn;
-  }
-
   /* Which media a hip has, in the order the tabs should appear. The photo
      leads because it's ~150KB; the breeze videos are ~35MB apiece, so nothing
      loads until you ask for it. */
@@ -440,22 +412,25 @@ OBS.ui = (function () {
 
     return '' +
     '<tr class="detail" data-detail-for="' + esc(h.key) + '"><td colspan="13"><div class="detail-inner">' +
+      /* This whole column is what you *enter* about a horse — notes, lists,
+         vet, ratings — while the right-hand column stays purely what the sale
+         tells you. Notes lead because they are what you reach for first with a
+         horse in front of you; the ratings sit at the bottom because you make
+         them last, having looked.
+
+         There is no Repository block here as there is in the yearling model:
+         the OBS feed doesn't carry one. */
       '<div class="detail-block">' +
-        '<h4>Why it scores what it scores</h4>' +
-        '<div data-comp-block="' + esc(h.key) + '">' + componentsHtml(h) + '</div>' +
+        '<h4>Notes</h4>' +
+        '<textarea class="note-box" placeholder="Notes — walk, shoulder, knees, vet findings, price ceiling…" ' +
+                  'data-note="' + esc(h.key) + '">' + esc(note && note.notes || '') + '</textarea>' +
 
         '<h4 style="margin-top:14px">Short lists &amp; vet</h4>' +
         listChips(h.key) +
         '<div class="vet-row">' +
           vetSelect(h.key, 'vet-select vet-select-lg') +
         '</div>' +
-        '<textarea class="note-box" placeholder="Notes — walk, shoulder, knees, vet findings, price ceiling…" ' +
-                  'data-note="' + esc(h.key) + '">' + esc(note && note.notes || '') + '</textarea>' +
 
-        /* The sliders sit at the bottom of this column, under the notes, so
-           everything you *enter* about a horse — lists, vet, notes, the three
-           ratings — is in one place, and the right column stays purely what
-           the sale tells you. */
         '<h4 style="margin-top:14px">Your ratings</h4>' +
         gradeRow('Breeze visual', 'bv', h.key, bv,
           h.breezeSec === null ? 'no work' : U.formatBreeze(h.breezeSec) + ' ' + h.distLabel) +
@@ -605,7 +580,6 @@ OBS.ui = (function () {
     listChips: listChips,
     renderRows: renderRows,
     detailHtml: detailHtml,
-    componentsHtml: componentsHtml,
     saleHistoryHtml: saleHistoryHtml,
     mediaHtml: mediaHtml,
     mediaTabs: mediaTabs,

@@ -426,12 +426,6 @@
       sel.classList.add('vet-' + vet);
     });
 
-    // Refresh only the score breakdown. Rebuilding the whole detail row would
-    // tear down the media pane — reloading a 35MB video, or losing your place
-    // in it — and blow away focus in the notes box.
-    var block = document.querySelector('[data-comp-block="' + CSS.escape(key) + '"]');
-    if (block) block.innerHTML = OBS.ui.componentsHtml(horse);
-
     Object.keys(vals).forEach(function (kind) {
       var v = vals[kind];
       var range = document.querySelector('[data-' + kind + '-range="' + CSS.escape(key) + '"]');
