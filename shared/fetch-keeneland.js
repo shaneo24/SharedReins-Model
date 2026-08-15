@@ -37,7 +37,10 @@
  *
  *     --dry-run [file]   fetch and write to JSON instead of Supabase. Needs no
  *                        access code, touches nothing. Good for a first look.
- *     --refresh          re-fetch mares already cached (default is to skip)
+ *     --max-age N        re-fetch mares cached more than N days ago
+ *                        (default 21). Keeps the cache from freezing at
+ *                        whatever was true the day it was first filled.
+ *     --refresh          re-fetch every mare regardless of age
  *     --limit N          stop after N mares, for a quick trial
  *     --concurrency N    parallel Keeneland requests (default 4)
  *
@@ -58,7 +61,7 @@ const KEE_DELIM = '^!^';
 
 function parseArgs(argv) {
   const out = { sales: [], dryRun: false, dryFile: null, refresh: false,
-                limit: Infinity, concurrency: 4 };
+                limit: Infinity, concurrency: 4, maxAgeDays: 21 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--dry-run') {
@@ -68,6 +71,7 @@ function parseArgs(argv) {
     } else if (a === '--refresh') out.refresh = true;
     else if (a === '--limit') out.limit = Number(argv[++i]) || Infinity;
     else if (a === '--concurrency') out.concurrency = Math.max(1, Number(argv[++i]) || 4);
+    else if (a === '--max-age') out.maxAgeDays = Math.max(0, Number(argv[++i]) || 0);
     // Several sales in one run share a single de-duplicated mare list, which
     // matters when a scheduled job sweeps every open catalogue at once.
     else if (!a.startsWith('--')) out.sales.push(a);
@@ -243,13 +247,33 @@ async function main() {
               `${unique.length} distinct mares.`);
 
   // --- what is already cached ------------------------------------------
+  //
+  // A cached mare is a snapshot, not a permanent answer. Her foal may go
+  // through Keeneland again after we last looked — a yearling sold in
+  // September turns up as a two-year-old the following spring, and that
+  // September sale is exactly the history the 2YO model needs. Skipping her
+  // forever because we saw her once would freeze the cache at whatever was
+  // true the day it was first filled.
+  //
+  // So a row older than --max-age is re-fetched. Genuinely new mares are
+  // always fetched; --refresh forces everything regardless of age.
   let todo = unique;
   if (rpc && !args.refresh) {
     const have = await rpc('sr_keeneland_read', { p_dams: unique });
-    const cached = new Set(Object.keys(have || {}));
-    todo = unique.filter(d => !cached.has(damKey(d)));
-    console.log(`${cached.size} already cached, ${todo.length} to fetch.` +
-                (cached.size ? '  (--refresh to re-fetch them)' : ''));
+    const cutoff = Date.now() - args.maxAgeDays * 86400000;
+    let fresh = 0, stale = 0;
+
+    todo = unique.filter(d => {
+      const entry = (have || {})[damKey(d)];
+      if (!entry) return true;                       // never looked up
+      const age = Date.parse(entry.fetchedAt || 0);
+      if (isFinite(age) && age >= cutoff) { fresh++; return false; }
+      stale++;
+      return true;
+    });
+
+    console.log(`${fresh} cached and fresh (skipped), ${stale} stale (re-fetching), ` +
+                `${todo.length - stale} new.`);
   }
   if (args.limit < todo.length) {
     todo = todo.slice(0, args.limit);

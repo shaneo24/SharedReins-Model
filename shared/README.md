@@ -189,6 +189,38 @@ touching Supabase or needing a code at all.
 A sale code that doesn't resolve is skipped with a warning rather than failing
 the run, so one stale entry in `DEFAULT_SALES` can't cost you the others.
 
+### You don't add Keeneland sales
+
+This trips people up. The sale list is **catalogues to read mares from**, not
+sales to search. Keeneland's search is *by mare*, and one lookup returns every
+Keeneland sale her foals have been through — September, November and January
+all come back together. A single search on one mare returned NOV 2025, NOV 2024,
+SEP 2024 and NOV 2023.
+
+So the three Keeneland sales are already covered, for every mare in the cache,
+without being named anywhere.
+
+### Why the cache expires
+
+A cached mare is a snapshot, not a permanent answer, and this is exactly the
+"sold this year, shows up as a two-year-old next year" case.
+
+A yearling sold at Keeneland September 2026 goes through the ring again at OBS
+in spring 2027. If her dam was cached in August 2026 and never looked at again,
+that September sale — the one the 2YO model most needs — would never appear.
+
+So rows older than `--max-age` days (default **21**) are re-fetched, while
+fresher ones are skipped. New mares are always fetched, and `--refresh` forces
+everything. The daily run is therefore cheap most days and does a full sweep
+every three weeks.
+
+### Sizing
+
+The nine default sales are **3,774 hips → 3,477 distinct mares** (about 300
+appear in more than one sale, and are looked up once). That's roughly eight
+minutes on a cold cache, and seconds on most days, since only stale and new
+mares are fetched.
+
 **The app prefers a live proxy when there is one.** Running `node serve.js`
 still queries Keeneland directly, so your own machine is never limited to what
 was last cached.

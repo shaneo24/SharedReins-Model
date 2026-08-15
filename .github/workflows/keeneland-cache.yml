@@ -39,18 +39,33 @@ on:
         type: boolean
         default: false
 
-# The sales currently worth caching. Fasig-Tipton codes are letters+digits
-# (N26A); OBS sales are numeric ids (149). Used when the run is scheduled; a
-# manual run can override it from the form above.
+# The sales worth caching. Fasig-Tipton codes are <region><yy><letter> — N New
+# York, K Kentucky, M Midlantic, C California — and OBS sales are numeric ids.
+# A manual run can override this from the form above.
+#
+#   N26A  Aug 10  The Saratoga Sale              N26B  Aug 16  New York Bred Yearlings
+#   K26B  Jul 14  The July Sale                  K26A  Feb 09  Kentucky Winter Mixed
+#   K25C  Oct 20  Kentucky October Yearlings     K25D  Nov 03  The November Sale
+#   N25C  Oct 14  Saratoga Fall Mixed            M25B  Sep 30  Midlantic Fall Yearlings
+#   C25B  Sep 23  California Fall Yearlings
+#
+# The 2026 autumn catalogues (October, November, the Fall mixed sales) are not
+# published yet, so their 2025 editions stand in until they are — the mares are
+# largely the same, and a mare cached once serves every sale she appears in.
+#
+# There is nothing to add for Keeneland. Their search is by MARE and returns
+# every Keeneland sale her foals have been through — September, November and
+# January all come back from the one lookup, for free.
 env:
-  DEFAULT_SALES: 'N26A N26B'
+  DEFAULT_SALES: 'N26A N26B K26B K26A K25C K25D N25C M25B C25B'
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    # Plenty for a few hundred mares; a hung run gets cut rather than burning
-    # minutes all night.
-    timeout-minutes: 20
+    # The nine default sales are ~3,500 distinct mares, which takes about eight
+    # minutes at four requests a second. This leaves room for a slow day
+    # without letting a hung run burn minutes all night.
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
