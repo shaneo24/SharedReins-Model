@@ -638,7 +638,6 @@ tr.hrow:hover > td { background: var(--bg-hover); }
 tr.hrow.is-open > td { background: var(--bg-3); }
 tr.hrow.is-out > td { opacity: .5; }
 
-.c-rank { width: 40px; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .c-score { width: 108px; }
 .c-hip { width: 56px; }
 .c-breeze { width: 108px; }

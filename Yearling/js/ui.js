@@ -242,7 +242,12 @@ FT.ui = (function () {
       'title="Sire book rating — reference only, not part of the score">' + s.value + '</span>';
   }
 
-  function rowHtml(h, rank, ctx) {
+  /* Hip leads the row. There is no position-in-the-list column: a hip number
+     and a rank are both small integers sitting side by side, and having them
+     disagree — as they almost always do — made the table harder to read than
+     the rank was worth. The hip is the horse's actual identity; the ranking is
+     already expressed by the order of the rows. */
+  function rowHtml(h, ctx) {
     var s = h._score || { total: null, components: [] };
     var total = s.total;
     var conf = FT.store.conformation(h.key);
@@ -253,15 +258,14 @@ FT.ui = (function () {
     return '' +
     '<tr class="hrow' + (h.status === 'out' ? ' is-out' : '') +
         (scratched ? ' is-scratched' : '') + '" data-key="' + esc(h.key) + '">' +
-      '<td class="c-rank">' + rank + '</td>' +
+      '<td class="c-hip"><span class="hip-num">' + esc(h.hip) + '</span>' +
+        '<div class="hip-sub">Barn ' + esc(h.barn || '—') + '</div></td>' +
       '<td class="c-score">' +
         '<div class="score-cell ' + scoreTier(total) + '">' +
           '<span class="score-num">' + (total === null ? '—' : total.toFixed(0)) + '</span>' +
           '<span class="score-bar"><i style="width:' + (total === null ? 0 : U.clamp(total, 0, 100)) + '%"></i></span>' +
         '</div>' +
       '</td>' +
-      '<td class="c-hip"><span class="hip-num">' + esc(h.hip) + '</span>' +
-        '<div class="hip-sub">Barn ' + esc(h.barn || '—') + '</div></td>' +
       '<td class="c-ped">' +
         '<div class="ped-sire">' + esc(h.sire || '—') + sireBadge(h, ctx) + '</div>' +
         '<div class="ped-dam">' + esc(h.dam || '—') +
@@ -296,7 +300,7 @@ FT.ui = (function () {
      match is worse than any render cost, and a Fasig-Tipton yearling sale is a
      few hundred hips, not a few thousand. */
   function renderRows(tbody, horses, ctx) {
-    tbody.innerHTML = horses.map(function (h, i) { return rowHtml(h, i + 1, ctx); }).join('');
+    tbody.innerHTML = horses.map(function (h) { return rowHtml(h, ctx); }).join('');
     return horses.length;
   }
 
@@ -524,7 +528,7 @@ FT.ui = (function () {
     var note = FT.store.getNote(h.key);
 
     return '' +
-    '<tr class="detail" data-detail-for="' + esc(h.key) + '"><td colspan="13"><div class="detail-inner">' +
+    '<tr class="detail" data-detail-for="' + esc(h.key) + '"><td colspan="12"><div class="detail-inner">' +
       '<div class="detail-block">' +
         '<h4>Why it scores what it scores</h4>' +
         '<div data-comp-block="' + esc(h.key) + '">' + componentsHtml(h) + '</div>' +
