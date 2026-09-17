@@ -215,25 +215,80 @@ async function pool(items, concurrency, work) {
 /* ------------------------------------------------------------- Supabase */
 
 function rpcCaller(cfg, code) {
+  const host = cfg.url.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
   return async function rpc(fn, body) {
-    const res = await fetch(cfg.url.replace(/\/+$/, '') + '/rest/v1/rpc/' + fn, {
-      method: 'POST',
-      headers: {
-        'apikey': cfg.anonKey,
-        'Authorization': 'Bearer ' + cfg.anonKey,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(Object.assign({ p_code: code }, body))
-    });
+    let res;
+    try {
+      res = await fetch(cfg.url.replace(/\/+$/, '') + '/rest/v1/rpc/' + fn, {
+        method: 'POST',
+        headers: {
+          'apikey': cfg.anonKey,
+          'Authorization': 'Bearer ' + cfg.anonKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(Object.assign({ p_code: code }, body))
+      });
+    } catch (e) {
+      // A paused Supabase project doesn't answer with an error — its hostname
+      // stops existing. "fetch failed" says nothing useful in a job log.
+      const why = (e.cause && e.cause.code) || e.message;
+      if (why === 'ENOTFOUND' || why === 'EAI_AGAIN') {
+        throw new Error(`Supabase host ${host} does not resolve. The project is most likely ` +
+                        'paused — restore it from the Supabase dashboard.');
+      }
+      throw new Error(`Could not reach Supabase (${why}).`);
+    }
     const text = await res.text();
     let parsed = null;
     try { parsed = text ? JSON.parse(text) : null; } catch (e) {}
     if (!res.ok) {
-      if (parsed && parsed.code === '28000') throw new Error('Access code not accepted.');
-      throw new Error((parsed && parsed.message) || ('HTTP ' + res.status));
+      const err = new Error((parsed && parsed.message) || ('HTTP ' + res.status));
+      err.pgCode = parsed && parsed.code;
+      if (err.pgCode === '28000') err.message = 'Access code not accepted.';
+      if (err.pgCode === '57014') {
+        err.message = `Supabase cancelled ${fn} for running too long (${err.message}).`;
+      }
+      throw err;
     }
     return parsed;
   };
+}
+
+/**
+ * When each of these mares was last fetched: { damKey: isoTime }.
+ *
+ * Asked in chunks, and of sr_keeneland_index — which returns timestamps only.
+ * Asking sr_keeneland_read for everything at once is what broke the daily job:
+ * it returns each mare's full history, ~15MB for the August sales alone, and
+ * Supabase cancels a public-role query after a few seconds.
+ *
+ * A database that hasn't had the schema re-run yet has no index function, so
+ * that case falls back to reading histories in chunks small enough to finish.
+ */
+async function cachedAt(rpc, dams) {
+  const out = {};
+  let useIndex = true;
+  const CHUNK_INDEX = 1000, CHUNK_READ = 100;
+  for (let i = 0; i < dams.length; ) {
+    const size = useIndex ? CHUNK_INDEX : CHUNK_READ;
+    const chunk = dams.slice(i, i + size);
+    if (useIndex) {
+      try {
+        Object.assign(out, await rpc('sr_keeneland_index', { p_dams: chunk }) || {});
+      } catch (e) {
+        if (e.pgCode !== 'PGRST202') throw e;
+        console.log('  (sr_keeneland_index not installed — re-run shared/schema.sql; ' +
+                    'falling back to smaller reads)');
+        useIndex = false;
+        continue;                      // same position, smaller chunk
+      }
+    } else {
+      const got = await rpc('sr_keeneland_read', { p_dams: chunk }) || {};
+      for (const k of Object.keys(got)) out[k] = got[k].fetchedAt;
+    }
+    i += size;
+  }
+  return out;
 }
 
 /* ------------------------------------------------------------------ main */
@@ -302,14 +357,14 @@ async function main() {
   // always fetched; --refresh forces everything regardless of age.
   let todo = unique;
   if (rpc && !args.refresh) {
-    const have = await rpc('sr_keeneland_read', { p_dams: unique });
+    const have = await cachedAt(rpc, unique);
     const cutoff = Date.now() - args.maxAgeDays * 86400000;
     let fresh = 0, stale = 0;
 
     todo = unique.filter(d => {
-      const entry = (have || {})[damKey(d)];
-      if (!entry) return true;                       // never looked up
-      const age = Date.parse(entry.fetchedAt || 0);
+      const fetchedAt = have[damKey(d)];
+      if (!fetchedAt) return true;                   // never looked up
+      const age = Date.parse(fetchedAt);
       if (isFinite(age) && age >= cutoff) { fresh++; return false; }
       stale++;
       return true;

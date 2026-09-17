@@ -91,6 +91,91 @@ needs no changes at all — it already probes for exactly that.
 
 ---
 
+## Keeneland September
+
+The 2026 Keeneland September Yearling Sale loads alongside the Fasig-Tipton
+catalogues — pick it in the sale list like any other. It's the default while
+it's running.
+
+**Where it comes from.** Keeneland's online catalogue is a Next.js page that
+loads the whole sale from one static file:
+
+```
+catalog-backend.keeneland.com/sites/default/files/json_hde/sale_data_132.json
+```
+
+It answers `Access-Control-Allow-Origin: *` — unlike Keeneland's horse search,
+which needs a proxy — so it's fetched straight from the browser, on GitHub Pages
+and off disk alike. 4,642 hips and 14MB of JSON, served gzipped at about 1.5MB;
+usable in roughly four seconds. Keeneland rewrites it after each session, so
+results arrive as the sale runs.
+
+Everything is reduced to the same record the Fasig-Tipton hips use, so scoring,
+filters, short lists, shared grades and the CSV export work unchanged. Keys are
+`KEE-S26:<hip>`.
+
+**Reading the results.** Taken from Keeneland's own page code rather than
+guessed, and checked against their stats panel for session 3 to the dollar
+(209 head, $89,535,000 in the ring; 15 post-sale for $2,122,500):
+
+| Feed says | Means |
+|---|---|
+| `field_out` = `Y` | withdrawn |
+| `field_rna_indicator` = `Y`, or a negative price | RNA — the price is the sentinel `-2.00`; what it was bid to only exists in the buyer text, `R.N.A. (385,000)` |
+| a positive price with indicator `P` | **sold post-sale** — RNA'd in the ring, deal done afterwards. Shown as `$200K PS` |
+| indicator `C` | private sale |
+| a positive price otherwise | sold in the ring |
+
+**What's different from a Fasig-Tipton hip.**
+
+- **Sessions** are numbered with their book — *Session 3 · Book 2* — and sort
+  1 → 12.
+- **Books** have their own dropdown in the toolbar, beside *★ to*: tick the
+  books you want, with each one's hip count shown. It's an ordinary filter, so
+  it shows as a chip, clears with *clear all*, and is kept in saved filters. It
+  only appears for a sale that has books, and a saved "Books 1–2" filter opened
+  over a Fasig-Tipton sale leaves its hips alone rather than emptying the table.
+- **Consignors** are the agency with the `, Agent for …` tail removed: 1,358
+  property lines become 125 agencies you can actually filter by.
+- **Colours** are mapped onto Fasig-Tipton's codes, so a saved colour filter
+  works on either house.
+- **Catalog updates** exist on three hips in four, because Keeneland publishes
+  every new placing under the dam. The ones Keeneland flags in red — new black
+  type — show a red **U** and a *notable* tag.
+- **Repository status isn't in the feed.** The detail panel says so, rather than
+  claiming nothing was lodged. The *X-rays in the repository* filter matches no
+  Keeneland hips for the same reason.
+- **Photos** are on about 2,900 hips, **walk videos** on about 2,900, and every
+  hip has its pedigree PDF.
+
+**Walk videos can be on Vimeo or YouTube** — in either house's catalogue.
+Keeneland puts `youtube.com/embed/<id>` links in the same field as its Vimeo
+ones (297 hips in September), and Fasig-Tipton's `youtube_url` field — usually
+Vimeo, despite the name — sometimes holds `youtu.be/<id>` (42 hips at Saratoga,
+43 at New York Bred). Both are recognised, count toward *Has walk video*, and
+play inline through YouTube's privacy-enhanced player. **One limit:** YouTube
+won't play an embed on a page opened straight off disk, so from `file://` the
+video tab offers a link to watch it on YouTube instead.
+
+**Sale history gets August too.** A yearling at Keeneland in September may have
+been through Saratoga or New York Bred a month earlier, and what it was bid to
+there is the most relevant number there is. Earlier yearling sales in the same
+season now load as history — 19 September hips trace to August, including hip
+174, which sold at Saratoga for $400,000 and was then withdrawn here. Only
+sales that *started before* the one you're shopping count, so a September
+catalogue can never appear in a Saratoga horse's past.
+
+Keeneland history for these horses comes through the shared cache, which the
+daily job now fills from this catalogue too — see
+[shared/README.md](../shared/README.md). Until its first run after this change,
+September hips read *"isn't in the shared Keeneland cache yet"*.
+
+**The table is bigger.** Almost 3,900 live rows re-render in about half a
+second, which is fine for a filter click. Search is already debounced, so typing
+doesn't stutter.
+
+---
+
 ## What's different from the 2YO model
 
 | | OBS 2YO | Fasig-Tipton yearlings |
@@ -574,7 +659,8 @@ list rather than dropping them.
 index.html          markup
 css/styles.css      styling, light + dark
 js/util.js          dates, percentiles, formatting
-js/data.js          Fasig-Tipton API, sale identifiers, record normalisation
+js/data.js          Fasig-Tipton API and the Keeneland catalogue adapter,
+                    sale identifiers, record normalisation
 js/config.js        shared-data connection settings (placeholders = local only)
 js/sync.js          shared-data transport — GENERATED from shared/sync.js
 js/store.js         localStorage: grades, notes, short lists, saved filters,

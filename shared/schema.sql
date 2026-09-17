@@ -467,6 +467,37 @@ begin
 end;
 $$;
 
+/*
+ * Which of these mares are cached, and when each was fetched — no rows.
+ *
+ * The fetch script needs exactly this to decide what to skip. It used to ask
+ * sr_keeneland_read instead, which hands back every mare's full history: about
+ * 15MB for the August sales, built in one statement. Supabase caps a query
+ * from the public role at a few seconds, so from the day the cache was first
+ * filled, every scheduled run timed out on that call and failed.
+ */
+create or replace function sr_keeneland_index(p_code text, p_dams text[])
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  result jsonb;
+begin
+  if not sr_check_code(p_code) then
+    raise exception 'Access code not accepted' using errcode = '28000';
+  end if;
+
+  select coalesce(jsonb_object_agg(k.dam_key, k.fetched_at), '{}'::jsonb)
+    into result
+    from keeneland_cache k
+   where k.dam_key = any (select sr_dam_key(d) from unnest(p_dams) d);
+
+  return result;
+end;
+$$;
+
 -- How many mares are cached, and how fresh. Lets the fetch script report
 -- progress and skip mares it already has.
 create or replace function sr_keeneland_status(p_code text)
@@ -493,6 +524,7 @@ $$;
 grant execute on function sr_read(text, text, timestamptz) to anon, authenticated;
 grant execute on function sr_write(text, text, text, jsonb) to anon, authenticated;
 grant execute on function sr_keeneland_read(text, text[]) to anon, authenticated;
+grant execute on function sr_keeneland_index(text, text[]) to anon, authenticated;
 grant execute on function sr_keeneland_write(text, jsonb) to anon, authenticated;
 grant execute on function sr_keeneland_status(text) to anon, authenticated;
 revoke all on function sr_dam_key(text) from public, anon, authenticated;

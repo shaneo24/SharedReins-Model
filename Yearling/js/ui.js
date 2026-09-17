@@ -108,6 +108,33 @@ FT.ui = (function () {
     sel.value = activeListId;
   }
 
+  /* ------------------------------------------------------------ book menu */
+
+  /**
+   * The "Books" dropdown in the toolbar: one checkbox per book, with the count
+   * of hips in each. Nothing ticked means every book, the same convention as
+   * the sidebar pickers. Returns the button label to show.
+   */
+  function renderBookMenu(panel, items, selected) {
+    selected = selected || [];
+    panel.innerHTML =
+      items.map(function (i) {
+        var on = selected.indexOf(i.key) !== -1;
+        return '<label class="book-menu-item">' +
+          '<input type="checkbox" value="' + esc(i.key) + '"' + (on ? ' checked' : '') + '>' +
+          '<span>' + esc(i.label) + '</span>' +
+          '<span class="n">' + i.count.toLocaleString() + '</span>' +
+        '</label>';
+      }).join('') +
+      '<div class="book-menu-tools">' +
+        '<button type="button" class="link-btn" data-book-action="all">all books</button>' +
+      '</div>';
+
+    if (!selected.length || selected.length === items.length) return 'Books: all';
+    var nums = selected.slice().sort(function (a, b) { return Number(a) - Number(b); });
+    return (nums.length === 1 ? 'Book ' : 'Books: ') + nums.join(', ');
+  }
+
   /* --------------------------------------------------------------- pickers */
 
   /**
@@ -321,10 +348,16 @@ FT.ui = (function () {
     if (h.photoLink) tabs.push({ id: 'photo', label: 'Photo', url: h.photoLink });
     if (h.pedigreeLink) tabs.push({ id: 'page', label: 'Catalog page', url: h.pedigreeLink });
     if (h.walkVideoId) {
+      var yt = h.walkVideoProvider === 'youtube';
       tabs.push({
         id: 'walk', label: 'Walk video', heavy: true,
-        url: h.walkVideoLink,
-        embed: 'https://player.vimeo.com/video/' + h.walkVideoId + '?app_id=122963'
+        provider: yt ? 'youtube' : 'vimeo',
+        // A Keeneland YouTube link is the bare embed page; the watch page is
+        // the better thing to open full size.
+        url: yt ? 'https://www.youtube.com/watch?v=' + h.walkVideoId : h.walkVideoLink,
+        embed: yt
+          ? 'https://www.youtube-nocookie.com/embed/' + h.walkVideoId + '?rel=0'
+          : 'https://player.vimeo.com/video/' + h.walkVideoId + '?app_id=122963'
       });
     }
     return tabs;
@@ -340,6 +373,20 @@ FT.ui = (function () {
     }
     if (tab.id === 'page') {
       return '<iframe src="' + esc(tab.url) + '#view=FitH" title="Catalog page"></iframe>';
+    }
+    if (tab.provider === 'youtube') {
+      /* YouTube refuses to play an embed that arrives with no referrer (its
+         "Error 153"), and a page opened straight off disk sends none. Say so
+         and link out, rather than show a player that can only fail. */
+      if (location.protocol === 'file:') {
+        return '<div class="media-hint">This walk video is on YouTube, which won’t play inside ' +
+               'a page opened from disk. <a href="' + esc(tab.url) + '" target="_blank" rel="noopener">' +
+               'Watch it on YouTube ↗</a></div>';
+      }
+      return '<iframe class="vimeo" src="' + esc(tab.embed) + '" title="Walk video" ' +
+             'referrerpolicy="strict-origin-when-cross-origin" ' +
+             'allow="accelerometer; encrypted-media; gyroscope; picture-in-picture; fullscreen" ' +
+             'allowfullscreen></iframe>';
     }
     return '<iframe class="vimeo" src="' + esc(tab.embed) + '" title="Walk video" ' +
            'allow="fullscreen; picture-in-picture" allowfullscreen></iframe>';
@@ -358,7 +405,8 @@ FT.ui = (function () {
     var buttons = tabs.map(function (t) {
       return '<button class="media-tab' + (current && t.id === current.id ? ' is-on' : '') + '" ' +
         'data-media-tab="' + t.id + '" data-media-key="' + esc(h.key) + '">' +
-        esc(t.label) + (t.heavy ? '<span class="media-heavy" title="Streams from Vimeo once you open this tab">streams</span>' : '') +
+        esc(t.label) + (t.heavy ? '<span class="media-heavy" title="Streams from ' +
+          (t.provider === 'youtube' ? 'YouTube' : 'Vimeo') + ' once you open this tab">streams</span>' : '') +
       '</button>';
     }).join('');
 
@@ -685,6 +733,7 @@ FT.ui = (function () {
     listChips: listChips,
     renderWeights: renderWeights,
     renderPicker: renderPicker,
+    renderBookMenu: renderBookMenu,
     syncPickerCount: syncPickerCount,
     renderRows: renderRows,
     detailHtml: detailHtml,

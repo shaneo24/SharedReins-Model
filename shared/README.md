@@ -162,6 +162,24 @@ shouldn't wait a week to be looked up.
 > activity for 60 days, and emails you when it does. A single commit re-enables
 > it. Worth knowing before a sale you were counting on it for.
 
+### If the job fails
+
+Open the failed run in the **Actions** tab and expand *Fetch Keeneland sale
+history* — the last lines say why. The two causes seen so far:
+
+- **`Supabase host … does not resolve`** — the project is paused. Supabase
+  pauses free projects after about a week without activity; restore it from the
+  Supabase dashboard. A paused project also stops the shared grades syncing.
+- **A query cancelled for running too long** — almost certainly the daily
+  failure from 15 August to 17 September (inferred from the timings: the one
+  run that started with an empty cache succeeded, and every run after it died
+  within seconds). Deciding which mares to skip used to fetch every cached
+  mare's full history in one call, about 15MB, and Supabase cancels a public
+  query after a few seconds. The job now asks `sr_keeneland_index`,
+  which returns only timestamps, in chunks. Until `schema.sql` has been re-run to
+  install that function, the job falls back to reading histories 100 mares at a
+  time — slower, but it finishes.
+
 ### Running it by hand
 
 Same script, if you'd rather not wait for the schedule or want it before the
@@ -216,10 +234,14 @@ every three weeks.
 
 ### Sizing
 
-The nine default sales are **3,774 hips → 3,477 distinct mares** (about 300
-appear in more than one sale, and are looked up once). That's roughly eight
-minutes on a cold cache, and seconds on most days, since only stale and new
-mares are fetched.
+The ten default catalogues are **8,416 hips → 7,521 distinct mares** — the
+Keeneland September sale alone is 4,642 hips, and mares that appear in more
+than one catalogue are looked up once. That's roughly eighteen minutes on a cold
+cache and far less on most days, since only stale and new mares are fetched.
+The job's timeout is 45 minutes.
+
+`KEE-S26` is a Keeneland *catalogue* — somewhere to read mares from — and is
+listed first so the sale that's running gets its mares fetched first.
 
 **The app prefers a live proxy when there is one.** Running `node serve.js`
 still queries Keeneland directly, so your own machine is never limited to what

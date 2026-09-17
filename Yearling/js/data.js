@@ -239,6 +239,26 @@ FT.data = (function () {
     return m ? m[1] : '';
   }
 
+  /**
+   * A walk-video link -> { provider, id }, or null.
+   *
+   * Most consignors post to Vimeo, but some use YouTube, and both houses carry
+   * those links in the same field: Fasig-Tipton's `youtube_url` (despite the
+   * name, usually Vimeo) holds "https://youtu.be/<id>", sometimes with a
+   * leading space or a "?si=" tracking tail; Keeneland's `field_other_videos`
+   * holds "https://www.youtube.com/embed/<id>". Reading only Vimeo left 85
+   * hips at Saratoga and New York Bred, and 297 at Keeneland September,
+   * looking as if they had no video at all.
+   */
+  function videoRef(url) {
+    var s = String(url || '').trim();
+    var v = vimeoId(s);
+    if (v) return { provider: 'vimeo', id: v };
+    var y = s.match(/(?:youtu\.be\/|youtube(?:-nocookie)?\.com\/(?:embed\/|shorts\/|live\/|watch\?(?:[^#]*&)?v=))([A-Za-z0-9_-]{11})/i);
+    if (y) return { provider: 'youtube', id: y[1] };
+    return null;
+  }
+
   /* An unnamed yearling carries a placeholder of "<foaling year>-<DAM>", e.g.
      "2025-KEESHA". That is not a name, and showing it as one just clutters
      every row, so it's dropped. */
@@ -281,6 +301,7 @@ FT.data = (function () {
       return d.documentName;
     }).filter(Boolean);
 
+    var walk = videoRef(raw.youtube_url);
     var consignor = raw.consignor_name || raw.consignor || raw.property_line || '';
 
     return {
@@ -313,6 +334,7 @@ FT.data = (function () {
       barn: raw.barn || '',
       session: raw.session || '',
       sessionLabel: U.sessionLabel(raw.session),
+      book: '',              // Fasig-Tipton doesn't divide its sales into books
       foalArea: raw.foaled || '',
       foalDate: foalDate,
       foalDay: U.dayOfYear(foalDate),
@@ -330,9 +352,10 @@ FT.data = (function () {
       hasPhoto: photos.length > 0,
       photoLink: photos[0] || '',
       photoLinks: photos,
-      walkVideoId: vimeoId(raw.youtube_url),
-      walkVideoLink: raw.youtube_url || '',
-      hasWalkVideo: !!vimeoId(raw.youtube_url),
+      walkVideoId: walk ? walk.id : '',
+      walkVideoProvider: walk ? walk.provider : '',
+      walkVideoLink: String(raw.youtube_url || '').trim(),
+      hasWalkVideo: !!walk,
       pedigreeLink: catalogPageUrl(sale, raw.hip),
 
       /* The repository is the x-ray/vet-report set a consignor lodges before a
@@ -470,7 +493,9 @@ FT.data = (function () {
     var colour = KEE_COLOR[colourText] || colourText;
 
     var photos = [raw.field_main_image].concat(raw.field_image || []).filter(Boolean);
-    var videos = (raw.field_other_videos || []).filter(function (v) { return !!vimeoId(v); });
+    var videos = (raw.field_other_videos || []).map(function (v) {
+      return { url: String(v || '').trim(), ref: videoRef(v) };
+    }).filter(function (v) { return !!v.ref; });
     var update = keeUpdateText(raw.field_updates2);
 
     return {
@@ -521,8 +546,9 @@ FT.data = (function () {
       hasPhoto: photos.length > 0,
       photoLink: photos[0] || '',
       photoLinks: photos,
-      walkVideoId: videos.length ? vimeoId(videos[0]) : '',
-      walkVideoLink: videos[0] || '',
+      walkVideoId: videos.length ? videos[0].ref.id : '',
+      walkVideoProvider: videos.length ? videos[0].ref.provider : '',
+      walkVideoLink: videos.length ? videos[0].url : '',
       hasWalkVideo: videos.length > 0,
       pedigreeLink: raw.field_pedigree || '',
 
@@ -716,6 +742,7 @@ FT.data = (function () {
     updatesUrl: updatesUrl,
     catalogPageUrl: catalogPageUrl,
     vimeoId: vimeoId,
+    videoRef: videoRef,
     resolveSale: resolveSale,
     fetchSale: fetchSale,
     parseFile: parseFile

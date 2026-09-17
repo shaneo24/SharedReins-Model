@@ -37,7 +37,7 @@
         Yearling Sale Model
         <span class="brand-prop">Proprietary Property of Shared Reins</span>
       </span>
-      <small>Fasig-Tipton · selected yearlings</small>
+      <small>Fasig-Tipton &amp; Keeneland · yearlings</small>
     </span>
   </div>
 
@@ -265,6 +265,14 @@
         <span id="activeChips" class="chips"></span>
       </div>
       <div class="toolbar-right">
+        <!-- Only shown for a sale that is divided into books (Keeneland). -->
+        <div class="book-menu" id="bookMenu" hidden>
+          <button type="button" class="btn btn-sm book-menu-btn" id="bookMenuBtn"
+                  aria-haspopup="true" aria-expanded="false" title="Show only certain books">
+            <span id="bookMenuLabel">Books: all</span> ▾
+          </button>
+          <div class="book-menu-panel" id="bookMenuPanel" hidden></div>
+        </div>
         <label class="field field-inline" id="starTargetWrap" title="Which list the ★ button adds to">
           <span>★ to</span>
           <select id="starTarget"></select>

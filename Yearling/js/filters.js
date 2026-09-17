@@ -16,6 +16,7 @@ FT.filters = (function () {
       colors: [],
       areas: [],
       sessions: [],
+      books: [],              // Keeneland books, "1"-"6"
       foalFrom: null,         // Date
       foalTo: null,           // Date
       confMin: null,          // 0-10
@@ -80,7 +81,7 @@ FT.filters = (function () {
     if (!facets) return [];
     var out = [];
     [['sires', 'sire'], ['damSires', 'broodmare sire'], ['consignors', 'consignor'],
-     ['sessions', 'session'], ['areas', 'foaling state'], ['colors', 'colour']]
+     ['sessions', 'session'], ['books', 'book'], ['areas', 'foaling state'], ['colors', 'colour']]
       .forEach(function (pair) {
         var sel = f[pair[0]];
         if (!sel || !sel.length) return;
@@ -122,6 +123,15 @@ FT.filters = (function () {
         .map(function (k) {
           return { key: k, label: U.sessionLabel(k),
                    count: horses.filter(function (h) { return h.session === k; }).length };
+        }),
+      // Keeneland splits its September sale into books by quality. Fasig-Tipton
+      // has no books, so for one of their sales this is simply empty. Sorted
+      // numerically: Book 1 first.
+      books: Object.keys(tally(function (h) { return h.book; }))
+        .sort(function (a, b) { return Number(a) - Number(b); })
+        .map(function (k) {
+          return { key: k, label: 'Book ' + k,
+                   count: horses.filter(function (h) { return h.book === k; }).length };
         })
     };
   }
@@ -150,6 +160,10 @@ FT.filters = (function () {
       if (!inList(f.colors, h.color)) return false;
       if (!inList(f.areas, h.foalArea)) return false;
       if (!inList(f.sessions, h.session)) return false;
+      /* A hip with no book — every Fasig-Tipton hip — is left alone rather
+         than excluded, so a saved "Books 1–2" filter still works when opened
+         over Saratoga instead of emptying the table. */
+      if (f.books && f.books.length && h.book && f.books.indexOf(h.book) === -1) return false;
 
       if (f.foalFrom || f.foalTo) {
         if (!h.foalDate) return false;
@@ -204,6 +218,10 @@ FT.filters = (function () {
     if (f.colors.length) out.push({ id: 'colors', text: f.colors.length + ' colour' + (f.colors.length > 1 ? 's' : '') });
     if (f.areas.length) out.push({ id: 'areas', text: f.areas.join('/') });
     if (f.sessions.length) out.push({ id: 'sessions', text: f.sessions.map(U.sessionLabel).join(', ') });
+    if (f.books.length) {
+      out.push({ id: 'books', text: (f.books.length > 1 ? 'Books ' : 'Book ') + f.books.slice()
+        .sort(function (a, b) { return Number(a) - Number(b); }).join(', ') });
+    }
     if (f.foalFrom) out.push({ id: 'foalFrom', text: 'foaled ≥ ' + U.formatDate(f.foalFrom) });
     if (f.foalTo) out.push({ id: 'foalTo', text: 'foaled ≤ ' + U.formatDate(f.foalTo) });
     if (f.confMin !== null) out.push({ id: 'confMin', text: 'conf ≥ ' + f.confMin });

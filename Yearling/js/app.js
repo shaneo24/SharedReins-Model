@@ -490,7 +490,61 @@
     { el: 'pickSessions', id: 'sessions', title: 'Session', facet: 'sessions' }
   ];
 
+  /* The toolbar's Books dropdown. Rendered alongside the sidebar pickers so it
+     follows every way the filters can change — clear all, a removed chip, a
+     loaded preset, a different sale. Hidden for a sale with no books. */
+  function renderBookMenu() {
+    var wrap = $('bookMenu');
+    if (!wrap) return;
+    var items = (state.facets && state.facets.books) || [];
+    wrap.hidden = !items.length;
+    if (!items.length) { closeBookMenu(); return; }
+    var label = FT.ui.renderBookMenu($('bookMenuPanel'), items, state.filters.books);
+    $('bookMenuLabel').textContent = label;
+    $('bookMenuBtn').classList.toggle('is-filtered', label !== 'Books: all');
+  }
+
+  function closeBookMenu() {
+    var panel = $('bookMenuPanel');
+    if (!panel || panel.hidden) return;
+    panel.hidden = true;
+    $('bookMenuBtn').setAttribute('aria-expanded', 'false');
+  }
+
+  function wireBookMenu() {
+    var btn = $('bookMenuBtn'), panel = $('bookMenuPanel');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      var open = panel.hidden;
+      panel.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+    });
+    panel.addEventListener('change', function (e) {
+      if (e.target.type !== 'checkbox') return;
+      state.filters.books = [].map.call(panel.querySelectorAll('input:checked'), function (i) {
+        return i.value;
+      });
+      renderBookMenu();
+      recompute();
+    });
+    panel.addEventListener('click', function (e) {
+      if (e.target.dataset.bookAction !== 'all') return;
+      state.filters.books = [];
+      renderBookMenu();
+      recompute();
+    });
+    // Stays open while you tick several books; closes when you click away or
+    // press Escape, like any other menu.
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('#bookMenu')) closeBookMenu();
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeBookMenu();
+    });
+  }
+
   function renderPickers() {
+    renderBookMenu();
     if (!state.facets) return;
     PICKERS.forEach(function (p) {
       var el = $(p.el);
@@ -610,6 +664,8 @@
       $('fScoreMinVal').textContent = v <= 0 ? 'any' : v;
       reFilter();
     });
+
+    wireBookMenu();
 
     $('btnClearFilters').addEventListener('click', function () {
       state.filters = FT.filters.blank();

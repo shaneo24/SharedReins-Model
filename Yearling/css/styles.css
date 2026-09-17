@@ -568,7 +568,17 @@ input[type="range"] {
   min-height: 44px;
 }
 .toolbar-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex-wrap: wrap; }
-.toolbar-right { display: flex; align-items: center; gap: 8px; }
+/* The controls keep their natural width. Selects are width:100% with no
+   minimum everywhere else, which in a crowded row squeezed "★ to" and Sort
+   down to an empty box; when the row is short of space the whole group wraps
+   below the count line instead. */
+.toolbar { flex-wrap: wrap; }
+.toolbar-right {
+  display: flex; align-items: center; gap: 8px;
+  flex-wrap: wrap; justify-content: flex-end; margin-left: auto;
+}
+.toolbar-right > * { flex: 0 0 auto; }
+.toolbar-right select { width: auto; min-width: 96px; }
 
 .list-tools { display: inline-flex; gap: 10px; white-space: nowrap; }
 #starTargetWrap select { max-width: 150px; }
@@ -1090,3 +1100,36 @@ h4 .media-open { margin-left: 8px; font-weight: 400; text-transform: none; lette
   .modal { padding: 8px; }
   .modal-head-tools input[type="search"] { width: 120px; }
 }
+
+/* ------------------------------------------------------------ book menu */
+/* A toolbar dropdown rather than another sidebar picker: which books you are
+   looking at is the first cut you make at Keeneland, so it sits with the other
+   controls you reach for while working down the table. */
+.book-menu { position: relative; }
+.book-menu-btn { white-space: nowrap; }
+.book-menu-btn.is-filtered { color: var(--accent); border-color: var(--accent); }
+.book-menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 40;
+  min-width: 170px;
+  padding: 6px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.book-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.book-menu-item:hover { background: var(--bg-hover); }
+.book-menu-item > span:first-of-type { flex: 1; }
+.book-menu-item .n { color: var(--text-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.book-menu-tools { border-top: 1px solid var(--line-soft); margin-top: 4px; padding: 5px 6px 1px; }

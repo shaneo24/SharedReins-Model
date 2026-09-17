@@ -43,6 +43,9 @@ on:
 # York, K Kentucky, M Midlantic, C California — and OBS sales are numeric ids.
 # A manual run can override this from the form above.
 #
+#   KEE-S26  Sep 14  Keeneland September Yearling Sale — Keeneland's own catalogue,
+#                    listed first so the sale that is running gets its mares
+#                    fetched first if a run is ever cut short
 #   N26A  Aug 10  The Saratoga Sale              N26B  Aug 16  New York Bred Yearlings
 #   K26B  Jul 14  The July Sale                  K26A  Feb 09  Kentucky Winter Mixed
 #   K25C  Oct 20  Kentucky October Yearlings     K25D  Nov 03  The November Sale
@@ -53,26 +56,28 @@ on:
 # published yet, so their 2025 editions stand in until they are — the mares are
 # largely the same, and a mare cached once serves every sale she appears in.
 #
-# There is nothing to add for Keeneland. Their search is by MARE and returns
-# every Keeneland sale her foals have been through — September, November and
-# January all come back from the one lookup, for free.
+# Listing a Keeneland *catalogue* (KEE-S26) is different from listing a
+# Keeneland *sale to search*. The list is where mares are read from; the lookup
+# is by mare and returns every Keeneland sale her foals have been through —
+# September, November and January all come back from the one search.
 env:
-  DEFAULT_SALES: 'N26A N26B K26B K26A K25C K25D N25C M25B C25B'
+  DEFAULT_SALES: 'KEE-S26 N26A N26B K26B K26A K25C K25D N25C M25B C25B'
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
-    # The nine default sales are ~3,500 distinct mares, which takes about eight
-    # minutes at four requests a second. This leaves room for a slow day
-    # without letting a hung run burn minutes all night.
-    timeout-minutes: 30
+    # The default sales are ~7,500 distinct mares — about eighteen minutes on a
+    # cold cache, and far less on most days since only new and stale mares are
+    # fetched. This leaves room for a slow day without letting a hung run burn
+    # minutes all night.
+    timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
-          node-version: '20'
+          node-version: '24'
 
       - name: Check the access code is set
         env:
