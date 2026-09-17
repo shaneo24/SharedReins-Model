@@ -4,7 +4,7 @@
   var U = FT.util;
   var $ = function (id) { return document.getElementById(id); };
 
-  var DEFAULT_SALE = 'N26A';   // The Saratoga Sale
+  var DEFAULT_SALE = 'KEE-S26';   // Keeneland September — the sale running now
 
   var state = {
     loaded: {},            // sale code -> { sale, horses }
@@ -305,7 +305,10 @@
   function renderRefSales() {
     var el = $('refSales');
     if (!el) return;
-    el.innerHTML = FT.data.SALES.map(function (s) {
+    /* Keeneland catalogues are left out: the market index is documented as
+       Fasig-Tipton's, and a 4,600-hip file is not something to pull in by
+       brushing a chip. */
+    el.innerHTML = FT.data.SALES.filter(function (s) { return !s.source; }).map(function (s) {
       var on = state.refSaleIds.indexOf(s.code) !== -1;
       var loading = on && !state.loaded[s.code];
       var isCurrent = s.code === state.saleId;

@@ -1,6 +1,10 @@
-/* Loading and normalising the Fasig-Tipton catalog feed.
+/* Loading and normalising the catalogue feeds — Fasig-Tipton and Keeneland.
  *
- * Their catalogue pages are a React app over a Django REST API:
+ * Both are reduced to the same horse record (see normalizeHip), so nothing
+ * downstream needs to know which auction house a hip came from. Keeneland's
+ * feed is described with its adapter further down.
+ *
+ * Fasig-Tipton's catalogue pages are a React app over a Django REST API:
  *
  *   /django/api/sales/?sale_identifier=N26A   -> the sale record (gives its pk)
  *   /django/api/horses/?sale=<pk>             -> every hip in one request
@@ -24,8 +28,15 @@ FT.data = (function () {
      kept here as a fallback, since it is the one thing that could drift.
 
      `defaultRef` marks the prior-year yearling sales pooled into the market
-     index by default — see js/sires.js. Newest first. */
+     index by default — see js/sires.js. Newest first.
+
+     `source: 'keeneland'` marks a Keeneland catalogue, loaded through its own
+     adapter. Its code is deliberately not in Fasig-Tipton's <region><yy><letter>
+     shape, so nothing can mistake it for one of theirs. */
   var SALES = [
+    { code: 'KEE-S26', source: 'keeneland', keeId: 132, pedigreeSlug: 'k226',
+      year: 2026, start: '2026-09-14',
+      label: '2026 Keeneland September Yearling Sale', type: 'yearling' },
     { code: 'N26A', pk: 309, year: 2026, start: '2026-08-10',
       label: '2026 The Saratoga Sale (selected yearlings)', type: 'yearling' },
     { code: 'N26B', pk: 314, year: 2026, start: '2026-08-16',
@@ -84,9 +95,30 @@ FT.data = (function () {
   function historySalesFor(code) {
     var target = saleByCode(code);
     if (!target) return [];
-    return HISTORY_SALES.filter(function (s) {
+    var mixed = HISTORY_SALES.filter(function (s) {
       return (s.start.slice(5, 7) >= '10' && s.year === target.year - 1) ||
              (s.start.slice(5, 7) < '10' && s.year === target.year);
+    }).map(function (s) { return s.code; });
+    return mixed.concat(priorSalesFor(code).filter(function (c) {
+      return mixed.indexOf(c) === -1;
+    }));
+  }
+
+  /**
+   * Yearling sales earlier in the same season.
+   *
+   * The same crop moves between yearling sales: a colt that RNA'd at Saratoga
+   * in August is routinely re-entered at Keeneland in September, and what he
+   * was bid to in August is the most relevant number there is. Only sales that
+   * *started before* this one count — a later catalogue is a future entry, not
+   * history.
+   */
+  function priorSalesFor(code) {
+    var target = saleByCode(code);
+    if (!target || !target.start) return [];
+    return SALES.filter(function (s) {
+      return s.code !== target.code && s.year === target.year &&
+             s.start && s.start < target.start && !s.source;
     }).map(function (s) { return s.code; });
   }
 
@@ -144,7 +176,7 @@ FT.data = (function () {
    * with a positive hammer price is a sale.
    */
   function fetchObsSale(meta) {
-    return getJson(obsSaleUrl(meta.id)).then(function (data) {
+    return getJson(obsSaleUrl(meta.id), 'OBS').then(function (data) {
       var rows = (data && data.sale_hip) || [];
       return {
         meta: meta,
@@ -172,7 +204,11 @@ FT.data = (function () {
     });
   }
 
-  function saleUrl(code) { return API + 'sales/?sale_identifier=' + encodeURIComponent(code); }
+  function saleUrl(code) {
+    var meta = saleByCode(code);
+    if (meta && meta.source === 'keeneland') return keeCatalogUrl(meta.keeId);
+    return API + 'sales/?sale_identifier=' + encodeURIComponent(code);
+  }
   function horsesUrl(pk) { return API + 'horses/?sale=' + pk; }
   function updatesUrl(pk) { return API + 'updates/?horse__sale_id=' + pk; }
 
@@ -335,11 +371,221 @@ FT.data = (function () {
     return horses;
   }
 
+  /* -------------------------------------------------------------- Keeneland */
+  /*
+   * Keeneland's online catalogue is a Next.js page that loads the whole sale
+   * from one static file:
+   *
+   *   catalog-backend.keeneland.com/sites/default/files/json_hde/sale_data_<id>.json
+   *
+   * It answers `Access-Control-Allow-Origin: *` — unlike their horse search,
+   * which needs a proxy — so the browser fetches it directly, from GitHub Pages
+   * and from file:// alike. The September sale is ~4,600 hips and 14MB of JSON,
+   * but Cloudflare serves it gzipped at about 1.5MB. It is rewritten after each
+   * session, so results arrive as the sale runs.
+   *
+   * The outcome fields are read exactly as Keeneland's own table reads them
+   * (checked against their page bundle, not guessed):
+   *
+   *   field_out 'Y'                          -> OUT
+   *   field_rna_indicator 'Y', or price < 0  -> RNA. The price is the sentinel
+   *                                             -2.00; the bid-to figure only
+   *                                             exists in the buyer text,
+   *                                             "R.N.A. (385,000)".
+   *   price > 0 and indicator 'P'            -> sold post-sale: RNA'd in the
+   *                                             ring, deal done afterwards.
+   *                                             Keeneland reports these apart
+   *                                             from "in the ring" sales.
+   *   indicator 'C'                          -> private sale
+   *   price > 0 otherwise                    -> sold in the ring
+   */
+  var KEE_CATALOG = 'https://catalog-backend.keeneland.com/sites/default/files/json_hde/sale_data_';
+
+  function keeCatalogUrl(id) { return KEE_CATALOG + id + '.json'; }
+
+  /* Keeneland spells colours out; Fasig-Tipton uses codes. Mapping onto the
+     codes means a saved colour filter works on either house's catalogue. */
+  var KEE_COLOR = {
+    'Bay': 'B', 'Brown': 'BR', 'Dark Bay/Brown': 'DKB', 'Chestnut': 'CH',
+    'Gray/Roan': 'GRR', 'Gray': 'GR', 'Roan': 'RO', 'Black': 'BL',
+    'White': 'WH', 'Palomino': 'PAL'
+  };
+
+  function keeRnaFigure(buyer) {
+    var m = String(buyer || '').match(/R\.?\s*N\.?\s*A\.?\s*\(\s*\$?([\d,]+)/i);
+    return m ? (parseInt(m[1].replace(/,/g, ''), 10) || null) : null;
+  }
+
+  /* Page updates arrive as HTML — "<b>2nd dam</b><div><b>ELYSIAN FIELD</b> (2020
+     f. by…)</div>". The update box renders text, so the markup is flattened
+     with each section heading and paragraph on its own line. Bold also marks
+     black-type horses mid-sentence, so only the "1st dam" / "2nd dam" headings
+     get a break of their own. */
+  function keeUpdateText(html) {
+    return String(html || '')
+      .replace(/<b>\s*(\d+(?:st|nd|rd|th) dam)\s*<\/b>/gi, '$1\n')
+      .replace(/<br\s*\/?>|<\/div>|<\/p>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ').replace(/&#0?39;|&apos;/g, "'").replace(/&quot;/g, '"')
+      .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
+      .replace(/[ \t]+\n/g, '\n').replace(/\n{2,}/g, '\n')
+      .trim();
+  }
+
+  function pad2(n) { n = String(n); return n.length < 2 ? '0' + n : n; }
+
+  /** One Keeneland catalogue record -> the same shape normalizeHip returns. */
+  function normalizeKeeneland(raw, sale) {
+    var hip = String(parseInt(raw.field_hip_number, 10) || String(raw.field_hip_number || '').trim());
+    var isOut = raw.field_out === 'Y';
+    var flag = String(raw.field_rna_indicator || '');
+    var amount = num(raw.field_price);
+    var rna = !isOut && (flag === 'Y' || (amount !== null && amount < 0));
+    var sold = !isOut && !rna && amount !== null && amount > 0;
+    var buyer = String(raw.field_buyer_name || '').trim();
+
+    var foalDate = U.parseDate(raw.field_foaling_date);
+    var foalYear = foalDate ? String(foalDate.getFullYear()) : '';
+
+    // Names arrive already properly cased — "Sea The Stars (IRE)" — and
+    // titleCase would lower the country suffix, so they are only trimmed.
+    var sire = String(raw.field_sire || '').trim();
+    var dam = String(raw.field_dam || '').trim();
+    var damSire = String(raw.field_broodmare_sire || '').trim();
+
+    // The property line carries "…, Agent for X"; the agency alone is what you
+    // filter by. 1,358 distinct property lines collapse to 125 agencies.
+    var consignor = String(raw.field_consignor || '').trim();
+    var consignorSort = consignor.replace(/,\s*Agent\b.*$/i, '').trim() ||
+                        String(raw.field_consignor_name || '').trim();
+
+    // Zero-padded so the session picker's plain string sort is chronological
+    // (Session 10 after Session 9, not after Session 1), and carrying the book
+    // because that is how Keeneland itself names a session.
+    var session = raw.field_session
+      ? 'Session ' + pad2(raw.field_session) + (raw.field_book ? ' · Book ' + raw.field_book : '')
+      : '';
+
+    var colourText = String(raw.field_color || '').trim();
+    var colour = KEE_COLOR[colourText] || colourText;
+
+    var photos = [raw.field_main_image].concat(raw.field_image || []).filter(Boolean);
+    var videos = (raw.field_other_videos || []).filter(function (v) { return !!vimeoId(v); });
+    var update = keeUpdateText(raw.field_updates2);
+
+    return {
+      key: sale.code + ':' + hip,
+      saleId: sale.code,
+      saleCode: sale.code,
+      saleLabel: sale.label,
+      saleYear: sale.year,
+      salePk: sale.pk,
+      source: 'keeneland',
+
+      hip: hip,
+      hipNum: parseInt(hip, 10) || 0,
+      name: '',                         // the title is only ever "Hip 0756"
+      sex: raw.field_sex || '',
+      sexLabel: U.SEX[raw.field_sex] || raw.field_sex || '—',
+      color: colour,
+      colorLabel: U.COLOR[colour] || colourText || '—',
+
+      sire: sire,
+      sireRaw: sire.toUpperCase(),
+      dam: dam,
+      damRaw: dam.toUpperCase(),
+      damSire: damSire,
+      damSireRaw: damSire.toUpperCase(),
+
+      consignor: consignor,
+      consignorSort: consignorSort,
+      barn: String(raw.field_barn_text || (raw.field_barns || []).join(', ')).trim(),
+      session: session,
+      sessionLabel: U.sessionLabel(session),
+      book: raw.field_book || '',
+      foalArea: String(raw.field_foaling_area || '').trim(),
+      foalDate: foalDate,
+      foalDay: U.dayOfYear(foalDate),
+      foalYear: foalYear,
+
+      status: isOut ? 'out' : 'in',
+      outDate: null,
+      sold: sold,
+      rna: rna,
+      price: sold ? amount : null,
+      bidTo: rna ? keeRnaFigure(buyer) : null,
+      buyer: sold ? buyer : '',
+      postSale: sold && flag === 'P',
+      privateSale: flag === 'C',
+
+      hasPhoto: photos.length > 0,
+      photoLink: photos[0] || '',
+      photoLinks: photos,
+      walkVideoId: videos.length ? vimeoId(videos[0]) : '',
+      walkVideoLink: videos[0] || '',
+      hasWalkVideo: videos.length > 0,
+      pedigreeLink: raw.field_pedigree || '',
+
+      /* Keeneland runs a repository too, but this feed says nothing about it.
+         `repoKnown: false` lets the detail panel say "not published" rather
+         than "nothing lodged", which would be a claim we can't back. */
+      hasXray: false,
+      repoDocs: [],
+      repoUpdated: '',
+      repoKnown: false,
+
+      // Every hip whose family has done anything since printing carries text
+      // here — three in four of them. Keeneland flags the notable ones (a new
+      // graded winner under the dam) in red, and so does this app.
+      update: update,
+      hasUpdate: !!update,
+      updateDate: '',
+      updateMajor: raw.field_update_link_red === 'Y',
+
+      supplement: raw.field_supplement_indicator === 'Y',
+      tjcRef: '',
+      soldAsCode: ''
+    };
+  }
+
+  /** The feed is an object keyed by node id; its values are the hips. */
+  function keenelandHorses(data, sale) {
+    var rows = Array.isArray(data) ? data
+      : Object.keys(data || {}).map(function (k) { return data[k]; });
+    return rows.filter(function (r) {
+      return r && r.field_hip_number && r.field_hidden_indicator !== 'Y';
+    }).map(function (r) {
+      return normalizeKeeneland(r, sale);
+    }).sort(function (a, b) { return a.hipNum - b.hipNum; });
+  }
+
+  function keenelandSaleRecord(meta) {
+    return {
+      code: meta.code, pk: meta.keeId, label: meta.label, short: meta.code,
+      year: meta.year, start: meta.start, category: meta.type,
+      maxHip: null, showResults: true, raw: null, source: 'keeneland'
+    };
+  }
+
+  function fetchKeenelandSale(meta) {
+    var sale = keenelandSaleRecord(meta);
+    // `no-cache` revalidates against the ETag instead of trusting a copy up to
+    // five minutes old — this file changes as each session's results land.
+    return getJson(keeCatalogUrl(meta.keeId), 'Keeneland', { cache: 'no-cache' })
+      .then(function (data) {
+        var horses = keenelandHorses(data, sale);
+        if (!horses.length) throw new Error('Keeneland returned an empty catalogue for ' + meta.label + '.');
+        sale.maxHip = horses[horses.length - 1].hipNum;
+        return { sale: sale, horses: horses, fetchedAt: Date.now() };
+      });
+  }
+
   /* ---------------------------------------------------------------- loading */
 
-  function getJson(url) {
-    return fetch(url, { credentials: 'omit' }).then(function (r) {
-      if (!r.ok) throw new Error('Fasig-Tipton returned HTTP ' + r.status);
+  function getJson(url, who, opts) {
+    var init = Object.assign({ credentials: 'omit' }, opts || {});
+    return fetch(url, init).then(function (r) {
+      if (!r.ok) throw new Error((who || 'Fasig-Tipton') + ' returned HTTP ' + r.status);
       return r.json();
     });
   }
@@ -379,6 +625,8 @@ FT.data = (function () {
 
   /** Live fetch of one sale: sale record, then hips, then catalog updates. */
   function fetchSale(code) {
+    var meta = saleByCode(code);
+    if (meta && meta.source === 'keeneland') return fetchKeenelandSale(meta);
     return resolveSale(code).then(function (sale) {
       return getJson(horsesUrl(sale.pk)).then(function (rows) {
         if (!Array.isArray(rows)) throw new Error('Unexpected payload for sale ' + code + '.');
@@ -407,6 +655,28 @@ FT.data = (function () {
     try { json = JSON.parse(text); }
     catch (e) { throw new Error('Could not parse that file as JSON.'); }
 
+    // A saved Keeneland sale_data_<id>.json: an object of hips keyed by node id.
+    var keeRows = json && !Array.isArray(json) && typeof json === 'object'
+      ? Object.keys(json).map(function (k) { return json[k]; }) : null;
+    if (keeRows && keeRows.length && keeRows[0] && keeRows[0].field_hip_number !== undefined) {
+      // The file doesn't say which sale it is, only the sale id inside each
+      // pedigree link ("…/k226/…") — so match on the one Keeneland catalogue
+      // we know, and refuse anything else rather than mislabel it.
+      var kee = SALES.filter(function (s) { return s.source === 'keeneland'; });
+      var slug = String(keeRows[0].field_pedigree || '').match(/\/sales\/(k\d+)\//i);
+      var pick = kee.filter(function (s) {
+        return slug && s.pedigreeSlug && s.pedigreeSlug === slug[1].toLowerCase();
+      })[0] || (kee.length === 1 ? kee[0] : null);
+      if (!pick) {
+        throw new Error('This looks like a Keeneland catalogue, but not one this app knows. ' +
+                        'Add it to SALES in js/data.js.');
+      }
+      var ksale = keenelandSaleRecord(pick);
+      var khorses = keenelandHorses(json, ksale);
+      ksale.maxHip = khorses.length ? khorses[khorses.length - 1].hipNum : null;
+      return { sale: ksale, horses: khorses, fetchedAt: Date.now() };
+    }
+
     var rows = Array.isArray(json) ? json : (json && json.horses);
     if (!Array.isArray(rows) || !rows.length || rows[0].hip === undefined) {
       throw new Error('That does not look like a Fasig-Tipton horses payload ' +
@@ -434,7 +704,10 @@ FT.data = (function () {
     HISTORY_SALES: HISTORY_SALES,
     saleByCode: saleByCode,
     historySalesFor: historySalesFor,
+    priorSalesFor: priorSalesFor,
     defaultRefSales: defaultRefSales,
+    keeCatalogUrl: keeCatalogUrl,
+    normalizeKeeneland: normalizeKeeneland,
     OBS_HISTORY: OBS_HISTORY,
     obsHistoryFor: obsHistoryFor,
     fetchObsSale: fetchObsSale,

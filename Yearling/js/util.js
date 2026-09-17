@@ -28,10 +28,12 @@ FT.util = (function () {
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-  /** "2026-08-10" -> "Aug 10". Fasig-Tipton names its sessions by date. */
+  /** "2026-08-10" -> "Aug 10". Fasig-Tipton names its sessions by date.
+      Keeneland numbers them, and their key is zero-padded so it sorts —
+      "Session 03 · Book 2" reads back as "Session 3 · Book 2". */
   function sessionLabel(raw) {
     var d = parseDate(raw);
-    if (!d) return String(raw || '');
+    if (!d) return String(raw || '').replace(/^Session 0(\d)/, 'Session $1');
     return MONTHS[d.getMonth()] + ' ' + d.getDate();
   }
 

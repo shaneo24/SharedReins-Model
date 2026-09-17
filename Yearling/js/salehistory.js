@@ -67,11 +67,25 @@ FT.saleHistory = (function () {
   function ftMatches(horse, loaded) {
     var key = normDam(horse.dam) + '|' + horse.foalYear;
     var out = [];
+    var here = FT.data.saleByCode(horse.saleId);
+    var hereStart = (here && here.start) ||
+      (loaded[horse.saleId] && loaded[horse.saleId].sale.start) || '';
 
     Object.keys(loaded || {}).forEach(function (code) {
       if (String(code) === String(horse.saleId)) return;
       var entry = loaded[code];
       if (!entry) return;
+
+      /* Keeneland catalogues are left to the Keeneland leg below, which reads
+         their whole history for the mare. Matching them here as well would
+         list the same sale twice, and badge it as Fasig-Tipton. */
+      if (entry.sale.source === 'keeneland') return;
+
+      /* Only sales that happened first. With the same crop spread over
+         Saratoga, New York Bred and Keeneland September, a catalogue that is
+         loaded but *later* would otherwise read as this horse's past. */
+      if (hereStart && entry.sale.start && entry.sale.start >= hereStart) return;
+
       var meta = FT.data.saleByCode(code);
       entry.horses.forEach(function (o) {
         if (normDam(o.dam) + '|' + o.foalYear !== key) return;

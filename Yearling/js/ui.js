@@ -202,6 +202,12 @@ FT.ui = (function () {
 
   function resultCell(h) {
     if (h.status === 'out') return '<span class="tag tag-out">OUT</span>';
+    // A post-sale price was agreed after the horse RNA'd in the ring, which is
+    // a different signal from a hammer price and is marked as one.
+    if (h.sold && h.postSale) {
+      return '<span class="tag tag-sold" title="Sold post-sale, after failing to meet its reserve in the ring">' +
+        U.moneyShort(h.price) + ' PS</span>';
+    }
     if (h.sold) return '<span class="tag tag-sold">' + U.moneyShort(h.price) + '</span>';
     if (h.rna) return '<span class="tag tag-rna">RNA ' + (h.bidTo ? U.moneyShort(h.bidTo) : '') + '</span>';
     return '<span class="dim">—</span>';
@@ -218,7 +224,8 @@ FT.ui = (function () {
     }
     if (h.hasWalkVideo) bits.push('<span class="ev ev-vid" title="Walk video">▶</span>');
     if (h.hasUpdate) {
-      bits.push('<span class="ev ev-upd" title="Catalog page updated' +
+      bits.push('<span class="ev ev-upd' + (h.updateMajor ? ' ev-upd-major' : '') + '" title="' +
+        (h.updateMajor ? 'Notable page update — new black-type under the dam' : 'Catalog page updated') +
         (h.updateDate ? ' ' + esc(h.updateDate) : '') + '">U</span>');
     }
     return bits.length ? bits.join('') : '<span class="dim">—</span>';
@@ -422,6 +429,12 @@ FT.ui = (function () {
      sale. It never scores anything — it tells you whether there is something
      to send your vet to, which is the question you actually have. */
   function repositoryHtml(h) {
+    // Keeneland has a repository too, but its catalogue feed doesn't say what
+    // is in it. "Nothing lodged" would be a claim we can't make.
+    if (h.repoKnown === false) {
+      return '<div class="hist-line dim">Keeneland’s catalogue feed doesn’t publish repository ' +
+             'status — check their repository directly.</div>';
+    }
     if (!h.hasXray && !h.repoDocs.length) {
       return '<div class="hist-line dim">Nothing lodged in the repository.</div>';
     }
@@ -439,6 +452,7 @@ FT.ui = (function () {
   function updateHtml(h) {
     if (!h.hasUpdate) return '';
     return '<h4 style="margin-top:12px">Catalog update' +
+      (h.updateMajor ? ' <span class="tag tag-major">notable</span>' : '') +
       (h.updateDate ? ' <span class="dim" style="text-transform:none;letter-spacing:0">' +
         esc(h.updateDate) + '</span>' : '') + '</h4>' +
       '<div class="update-box">' + esc(h.update) + '</div>';
