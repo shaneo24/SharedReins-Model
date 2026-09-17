@@ -32,6 +32,7 @@
  *
  *     node shared/fetch-keeneland.js N26A
  *     node shared/fetch-keeneland.js 149
+ *     node shared/fetch-keeneland.js KEE-S26      (a Keeneland catalogue)
  *
  *   Useful flags:
  *
@@ -54,6 +55,13 @@ const path = require('path');
 
 const FT_API = 'https://www.fasigtipton.com/django/api/';
 const OBS_API = 'https://obssales.com/wp-json/obs-catalog-wp-plugin/v1/horse-sales/';
+const KEE_CATALOG = 'https://catalog-backend.keeneland.com/sites/default/files/json_hde/sale_data_';
+
+/* Keeneland catalogues the yearling model knows, by the code it uses for them
+   (Yearling/js/data.js). `kee:<id>` also works for any other sale id. */
+const KEE_SALES = {
+  'KEE-S26': { id: 132, label: '2026 Keeneland September Yearling Sale' }
+};
 const KEE_HOST = 'https://flex.keeneland.com/misc/SearchResults.do';
 const KEE_DELIM = '^!^';
 
@@ -124,6 +132,27 @@ async function fasigDams(code) {
   const horses = await getJson(FT_API + 'horses/?sale=' + pk, 'Fasig-Tipton');
   const rows = Array.isArray(horses) ? horses : (horses.results || []);
   return { label: list[0].name || code, dams: rows.map(h => h.dam) };
+}
+
+/**
+ * Every dam in a Keeneland catalogue — `KEE-S26`, or `kee:132` for any sale id.
+ *
+ * Their online catalogue loads the whole sale from one static JSON file, keyed
+ * by node id. It is 14MB raw but served gzipped, which fetch undoes.
+ */
+async function keenelandDams(code) {
+  const known = KEE_SALES[code.toUpperCase()];
+  const m = /^kee:(\d+)$/i.exec(code);
+  const id = known ? known.id : (m ? Number(m[1]) : null);
+  if (!id) throw new Error(`Unknown Keeneland sale "${code}".`);
+  const data = await getJson(KEE_CATALOG + id + '.json', 'Keeneland');
+  const rows = Array.isArray(data) ? data : Object.values(data || {});
+  const hips = rows.filter(r => r && r.field_hip_number);
+  if (!hips.length) throw new Error(`No horses in Keeneland sale ${id}.`);
+  return {
+    label: known ? known.label : `Keeneland sale ${id}`,
+    dams: hips.map(r => r.field_dam)
+  };
 }
 
 /**
@@ -234,10 +263,15 @@ async function main() {
   // --- the catalogues ---------------------------------------------------
   const allDams = [];
   for (const sale of args.sales) {
-    const isFasig = /^[A-Za-z]/.test(sale);
-    process.stdout.write(`Reading ${isFasig ? 'Fasig-Tipton' : 'OBS'} sale ${sale}… `);
+    // Checked first: a Keeneland code starts with a letter too, and would
+    // otherwise be looked up as a Fasig-Tipton identifier and skipped.
+    const isKee = /^kee[-:]/i.test(sale);
+    const isFasig = !isKee && /^[A-Za-z]/.test(sale);
+    const house = isKee ? 'Keeneland' : isFasig ? 'Fasig-Tipton' : 'OBS';
+    process.stdout.write(`Reading ${house} sale ${sale}… `);
     try {
-      const { label, dams } = isFasig ? await fasigDams(sale) : await obsDams(sale);
+      const { label, dams } = isKee ? await keenelandDams(sale)
+        : isFasig ? await fasigDams(sale) : await obsDams(sale);
       console.log(`${label} — ${dams.length} hips.`);
       allDams.push(...dams);
     } catch (e) {
