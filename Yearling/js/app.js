@@ -245,6 +245,57 @@
 
   /* ---------------------------------------------------------------- render */
 
+  /* ---------------------------------------------------------- table paging */
+  /*
+   * Only PAGE rows are in the table at first; more are appended as you scroll.
+   * A table is laid out as a single piece, so every row costs time whenever
+   * anything in it changes — opening a horse inserts a detail row, and with
+   * Keeneland's ~3,900 live hips that took up to a second. At 250 rows it is
+   * about 40ms, and sorting or filtering gets quicker for the same reason.
+   *
+   * The page count survives a repaint (grading a horse, a colleague's change
+   * arriving) so the table doesn't shrink under you, and starts over only when
+   * the list itself changes: sort, filters, sale, or tab.
+   */
+  var PAGE = 250;
+  var shownRows = 0;
+  var shownFor = '';
+
+  function viewSignature() {
+    return [state.saleId, state.tab, state.listId, state.sortBy,
+            JSON.stringify(FT.filters.serialize(state.filters))].join('|');
+  }
+
+  function drawRows() {
+    var sig = viewSignature();
+    var want = sig === shownFor ? Math.max(PAGE, shownRows) : PAGE;
+    shownFor = sig;
+    // An open horse further down than that stays drawn, or its panel would
+    // silently close on the next repaint.
+    if (state.openKey) {
+      for (var i = 0; i < state.view.length; i++) {
+        if (state.view[i].key === state.openKey) {
+          if (i >= want) want = Math.ceil((i + 1) / PAGE) * PAGE;
+          break;
+        }
+      }
+    }
+    shownRows = FT.ui.renderRows($('rows'), state.view, state.ctx, want);
+  }
+
+  function drawMoreRows() {
+    if (shownRows >= state.view.length) return;
+    shownRows = FT.ui.appendRows($('rows'), state.view, state.ctx, shownRows, shownRows + PAGE);
+  }
+
+  function wirePaging() {
+    var wrap = $('tableWrap');
+    wrap.addEventListener('scroll', function () {
+      // Start drawing the next page a screen or so before the end arrives.
+      if (wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 1200) drawMoreRows();
+    }, { passive: true });
+  }
+
   function render() {
     var loaded = !!state.horses.length;
     var onList = state.tab === 'list';
@@ -261,7 +312,7 @@
       $('emptyListName').textContent = l ? l.name : 'this list';
     }
 
-    FT.ui.renderRows($('rows'), state.view, state.ctx);
+    drawRows();
 
     renderTabs();
     $('countCatalog').textContent = loaded ? state.horses.length.toLocaleString() : '—';
@@ -779,7 +830,10 @@
     });
 
     /* -- table ------------------------------------------------------------- */
+    wirePaging();
+
     $('rows').addEventListener('click', function (e) {
+      if (e.target.dataset && e.target.dataset.moreRows) { drawMoreRows(); return; }
       var flag = e.target.closest('[data-flag]');
       if (flag) {
         e.stopPropagation();

@@ -170,9 +170,17 @@ daily job now fills from this catalogue too — see
 [shared/README.md](../shared/README.md). Until its first run after this change,
 September hips read *"isn't in the shared Keeneland cache yet"*.
 
-**The table is bigger.** Almost 3,900 live rows re-render in about half a
-second, which is fine for a filter click. Search is already debounced, so typing
-doesn't stutter.
+**The table is drawn in pages of 250.** More rows are added as you scroll
+(or with *Show more now* at the foot of the table). A browser lays a table out as
+one piece, so every row costs time whenever anything in it changes — including
+the detail row that opens under a horse. With all ~3,900 live hips drawn,
+opening one took up to a second; with 250 it is a fraction of that, and sorting
+and filtering are quicker too. The count stays after a repaint (grading a horse,
+a colleague's change arriving) and resets only when the list itself changes —
+sort, filters, sale or tab. Scroll a long way down and the table grows again, so
+opening a horse becomes gradually slower the deeper you go; filtering (a book,
+a sire) is the faster way to a small set. The browser's own find (Ctrl+F) only
+sees rows that have been drawn — use the app's search box instead.
 
 ---
 

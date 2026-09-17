@@ -333,9 +333,37 @@ FT.ui = (function () {
   /* Renders the whole filtered set — no paging. A search that silently omits a
      match is worse than any render cost, and a Fasig-Tipton yearling sale is a
      few hundred hips, not a few thousand. */
-  function renderRows(tbody, horses, ctx) {
-    tbody.innerHTML = horses.map(function (h) { return rowHtml(h, ctx); }).join('');
-    return horses.length;
+  /* The table is drawn a page at a time. A browser lays out a table as one
+     piece, so every row in it is re-measured whenever a row is added —
+     including the detail row that opens under a horse. With Keeneland's ~3,900
+     live hips that took close to a second per click; with 250 it takes about
+     40ms. More pages are appended as you scroll (see app.js). */
+
+  function moreRowHtml(shown, total) {
+    if (shown >= total) return '';
+    return '<tr class="more-row"><td colspan="12">Showing ' + shown.toLocaleString() +
+      ' of ' + total.toLocaleString() + ' — more load as you scroll. ' +
+      '<button type="button" class="link-btn" data-more-rows="1">Show more now</button></td></tr>';
+  }
+
+  /** Draw the first `limit` horses. Returns how many were drawn. */
+  function renderRows(tbody, horses, ctx, limit) {
+    var n = Math.min(horses.length, limit || horses.length);
+    var html = '';
+    for (var i = 0; i < n; i++) html += rowHtml(horses[i], ctx);
+    tbody.innerHTML = html + moreRowHtml(n, horses.length);
+    return n;
+  }
+
+  /** Add horses [from, to) under the ones already drawn. Returns the new count. */
+  function appendRows(tbody, horses, ctx, from, to) {
+    to = Math.min(horses.length, to);
+    var more = tbody.querySelector('tr.more-row');
+    if (more) more.remove();
+    var html = '';
+    for (var i = from; i < to; i++) html += rowHtml(horses[i], ctx);
+    tbody.insertAdjacentHTML('beforeend', html + moreRowHtml(to, horses.length));
+    return to;
   }
 
   /* ---------------------------------------------------------------- detail */
@@ -736,6 +764,7 @@ FT.ui = (function () {
     renderBookMenu: renderBookMenu,
     syncPickerCount: syncPickerCount,
     renderRows: renderRows,
+    appendRows: appendRows,
     detailHtml: detailHtml,
     saleHistoryHtml: saleHistoryHtml,
     mediaHtml: mediaHtml,
