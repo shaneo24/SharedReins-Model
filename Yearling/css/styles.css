@@ -669,6 +669,7 @@ tr.hrow.is-out > td { opacity: .5; }
 .ev-xray { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .ev-vid { color: var(--text-2); }
 .ev-upd { color: var(--gold); border-color: color-mix(in srgb, var(--gold) 45%, transparent); }
+.ev-upd.ev-upd-major { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 55%, transparent); font-weight: 800; }
 
 .sire-badge {
   display: inline-block;
@@ -718,6 +719,9 @@ tr.hrow.is-out > td { opacity: .5; }
 .tag-sold { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, transparent); }
 .tag-rna { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, transparent); }
 .tag-out { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent); }
+/* Keeneland marks a page update that adds black type in red; so do we. */
+.tag-major { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 45%, transparent);
+             text-transform: none; letter-spacing: 0; }
 
 .conf-input {
   width: 52px;
